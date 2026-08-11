@@ -1,4 +1,4 @@
-// All resources for the M365 Copilot Usage Reporter, deployed into one RG:
+// All resources for the M365 Copilot Prompt Analyser, deployed into one RG:
 // Log Analytics, Container Registry, managed identity, Container Apps
 // Environment, a PostgreSQL flexible server, and the api + worker container apps.
 @description('Location for all resources.')

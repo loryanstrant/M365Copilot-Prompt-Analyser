@@ -4,7 +4,7 @@ name: Publish container images
 # (GHCR) so the "Deploy to Azure" button can pull prebuilt public images.
 #
 # One-time setup after the first successful run: open the repo's Packages, and
-# for BOTH "m365copilot-usage-reporter/api" and ".../worker" set the package
+# for BOTH "m365copilot-prompt-analyser/api" and ".../worker" set the package
 # visibility to Public (Package settings -> Danger Zone -> Change visibility).
 # Azure Container Apps then pulls them anonymously with no registry credentials.
 
@@ -24,7 +24,7 @@ concurrency:
 env:
   REGISTRY: ghcr.io
   # Lowercased owner + repo image namespace (GHCR requires lowercase).
-  IMAGE_NAMESPACE: ghcr.io/${{ github.repository_owner }}/m365copilot-usage-reporter
+  IMAGE_NAMESPACE: ghcr.io/${{ github.repository_owner }}/m365copilot-prompt-analyser
 
 jobs:
   build:

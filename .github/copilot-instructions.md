@@ -1,4 +1,4 @@
-# Copilot instructions — M365 Copilot Usage Reporter (containerised)
+# Copilot instructions — M365 Copilot Prompt Analyser (containerised)
 
 These are standing rules for GitHub Copilot in this repository. Apply them to every suggestion.
 

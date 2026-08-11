@@ -6,7 +6,7 @@
     "config": {
       "isWizard": false,
       "basics": {
-        "description": "Deploy the **M365 Copilot Usage Reporter** to Azure Container Apps. It pulls prebuilt public images, provisions a PostgreSQL flexible server, and serves the dashboard on a public HTTPS endpoint. You only need to set an admin password.",
+        "description": "Deploy the **M365 Copilot Prompt Analyser** to Azure Container Apps. It pulls prebuilt public images, provisions a PostgreSQL flexible server, and serves the dashboard on a public HTTPS endpoint. You only need to set an admin password.",
         "location": {
           "label": "Region",
           "toolTip": "Azure region for all resources.",

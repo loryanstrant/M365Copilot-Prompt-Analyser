@@ -7,6 +7,22 @@ OpenAI model for quality / GCSE / sentiment / category scoring and sensitive-inf
 detection, stores the results in PostgreSQL, and serves a web dashboard. Runs
 anywhere via Docker and deploys to Azure Container Apps.
 
+## Deploy to Azure (one click)
+
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Floryanstrant%2FM365Copilot-Prompt-Analyser%2Fmain%2Finfra%2Fazuredeploy.json/createUIDefinitionUri/https%3A%2F%2Fraw.githubusercontent.com%2Floryanstrant%2FM365Copilot-Prompt-Analyser%2Fmain%2Finfra%2FcreateUiDefinition.json)
+
+The button provisions everything into a resource group of your choice: a PostgreSQL
+flexible server, a Container Apps environment, and the **api** + **worker** container
+apps (pulled as prebuilt public images from GitHub Container Registry). You only enter
+an **admin password** — the database password and encryption keys are generated for
+you. When the deployment finishes, open the `dashboardUrl` output, sign in, and
+complete the in-app **Settings** to connect Microsoft Graph and Azure OpenAI.
+
+> **Maintainers:** the button relies on public images. After the first run of the
+> **Publish container images** workflow, set both GHCR packages
+> (`m365copilot-prompt-analyser/api` and `.../worker`) to **Public** once, so Container
+> Apps can pull them anonymously. See [`docs/deploy.md`](docs/deploy.md).
+
 This is a sibling of
 [`M365Copilot-Usage-Reporter`](https://github.com/loryanstrant/M365Copilot-Usage-Reporter)
 and [`AgentQualityReporter`](https://github.com/loryanstrant/AgentQualityReporter)

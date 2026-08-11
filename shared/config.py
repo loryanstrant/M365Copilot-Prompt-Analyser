@@ -63,7 +63,7 @@ class Settings(BaseSettings):
     translations_url: str = Field(
         default=(
             "https://raw.githubusercontent.com/loryanstrant/"
-            "M365Copilot-Usage-Reporter/main/translations/app-names.json"
+            "M365Copilot-Prompt-Analyser/main/translations/app-names.json"
         ),
         alias="TRANSLATIONS_URL",
     )

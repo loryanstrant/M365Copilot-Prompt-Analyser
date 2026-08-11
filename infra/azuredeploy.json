@@ -2,7 +2,7 @@
   "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
   "contentVersion": "1.0.0.0",
   "metadata": {
-    "description": "One-click deploy of the M365 Copilot Usage Reporter to Azure Container Apps. Pulls prebuilt public images from GitHub Container Registry, provisions a PostgreSQL flexible server, and wires everything together. Only an admin password is required; all other secrets are generated automatically."
+    "description": "One-click deploy of the M365 Copilot Prompt Analyser to Azure Container Apps. Pulls prebuilt public images from GitHub Container Registry, provisions a PostgreSQL flexible server, and wires everything together. Only an admin password is required; all other secrets are generated automatically."
   },
   "parameters": {
     "namePrefix": {
@@ -23,7 +23,7 @@
     },
     "imageRegistry": {
       "type": "string",
-      "defaultValue": "ghcr.io/loryanstrant/m365copilot-usage-reporter",
+      "defaultValue": "ghcr.io/loryanstrant/m365copilot-prompt-analyser",
       "metadata": {
         "description": "Registry path holding the public 'api' and 'worker' images."
       }
