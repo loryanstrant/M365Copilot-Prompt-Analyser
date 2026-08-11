@@ -1,0 +1,293 @@
+"""Pure, deterministic ingest-time transforms.
+
+Maps Microsoft Graph vocabulary onto this project's vocabulary at ingest time:
+a Graph **session** becomes a **Conversation** (``conversation_id``) and a Graph
+**interaction** becomes a **Prompt** (``prompt_id``). Nothing downstream of this
+module ever sees "session" or "interaction".
+
+Every function here is a pure function of its inputs (no I/O, no clock, no
+globals) so the rules can be pinned down with small JSON fixtures in the tests.
+"""
+from __future__ import annotations
+
+import re
+from datetime import date, datetime
+from typing import Any
+
+from shared.translations import Translations, default_translations
+
+# Prefix stamped onto Copilot app identifiers by Graph; stripped at ingest.
+APP_PREFIX = "IPM.SkypeTeams.Message.Copilot."
+
+# Graph returns two rows per exchange: the human 'userPrompt' and Copilot's
+# 'aiResponse'. Only the human prompt is a genuine record of usage, so responses
+# are dropped at ingest and never stored or counted. (Ref: aiInteraction schema —
+# interactionType is one of userPrompt | aiResponse | unknownFutureValue.)
+AI_RESPONSE_TYPE = "aiResponse"
+
+# Fragment (case-insensitive) in a UPN/mail that marks a non-primary account.
+_ONMICROSOFT = "onmicrosoft.com"
+
+
+def strip_app_prefix(value: str | None) -> str | None:
+    """Remove the ``IPM.SkypeTeams.Message.Copilot.`` prefix if present."""
+    if value is None:
+        return None
+    if value.startswith(APP_PREFIX):
+        return value[len(APP_PREFIX):]
+    return value
+
+
+def normalise_app_name(
+    app_class: str | None, translations: Translations | None = None
+) -> str | None:
+    """Map a prefix-stripped app identifier to its friendly display name.
+
+    Unknown identifiers are returned unchanged. ``translations`` defaults to the
+    built-in map; ingest passes a possibly remote-updated one.
+    """
+    if app_class is None:
+        return None
+    return (translations or default_translations()).display_name(app_class)
+
+
+def derive_conversation_location(conversation_type: str | None) -> str:
+    """"App" when the conversation type contains "appchat", else "Chat"."""
+    if conversation_type and "appchat" in conversation_type.lower():
+        return "App"
+    return "Chat"
+
+
+def derive_chat_type(
+    conversation_type: str | None, app_class: str | None
+) -> str | None:
+    """Bucket the prompt as Work / Web / Temporary, or ``None``.
+
+    - ``bizchat`` (conversation type or app) -> "Work"
+    - ``webchat`` (conversation type or app) -> "Web"
+    - ``PrivateChat`` (app) -> "Temporary"
+    """
+    ct = (conversation_type or "").lower()
+    ac = (app_class or "").lower()
+    if "bizchat" in ct or ac == "bizchat":
+        return "Work"
+    if "webchat" in ct or ac == "webchat":
+        return "Web"
+    if ac == "privatechat":
+        return "Temporary"
+    return None
+
+
+def derive_file_location(context_reference: str | None) -> str | None:
+    """Classify a file context's URL as OneDrive or SharePoint.
+
+    Mirrors the original Power Automate flow: a ``-my.sharepoint.com`` host is a
+    personal OneDrive; any other ``sharepoint.com`` host is SharePoint; anything
+    else (e.g. a Whiteboard/Loop URL) is not a document location.
+    """
+    if not context_reference:
+        return None
+    ref = context_reference.lower()
+    if "-my.sharepoint.com" in ref:
+        return "OneDrive"
+    if "sharepoint.com" in ref:
+        return "SharePoint"
+    return None
+
+
+def derive_teams_location(context_type: str | None) -> str | None:
+    """Classify a Teams context as Chat / Channel / Meeting.
+
+    Mirrors the flow (keep contextType only when it contains "Team") plus the
+    Power BI step that strips the "Teams" prefix (e.g. ``TeamsChannel`` ->
+    ``Channel``). The result is title-cased for a clean label.
+    """
+    if not context_type or "team" not in context_type.lower():
+        return None
+    lowered = context_type.lower()
+    idx = lowered.find("teams")
+    after = context_type[idx + len("teams"):] if idx != -1 else context_type
+    after = after.strip(" /\\:>-\t")
+    return after.capitalize() if after else None
+
+
+def extract_locations(
+    contexts: list[dict[str, Any]] | None,
+) -> tuple[str | None, str | None]:
+    """Pull ``(file_location, teams_location)`` from an interaction's contexts.
+
+    Follows the original solution, which inspects only the first context: a file
+    context carries a document URL in ``contextReference`` (classified to
+    OneDrive/SharePoint), while a Teams context carries a ``contextType`` such as
+    ``TeamsChat`` (classified to Chat/Channel/Meeting).
+    """
+    if not contexts:
+        return None, None
+    first = contexts[0] or {}
+    file_location = derive_file_location(first.get("contextReference"))
+    teams_location = derive_teams_location(first.get("contextType"))
+    return file_location, teams_location
+
+
+def _parse_date(value: str | None) -> date | None:
+    """Parse an ISO-8601 timestamp to a ``date`` (tolerating a trailing Z)."""
+    if not value:
+        return None
+    try:
+        return datetime.fromisoformat(value.replace("Z", "+00:00")).date()
+    except ValueError:
+        return None
+
+
+# Attachment markers the original flow stripped out of HTML-bodied prompts.
+_ATTACHMENT_RE = re.compile(r"<attachment[^>]*>.*?</attachment>", re.IGNORECASE | re.DOTALL)
+_SELFCLOSE_ATTACHMENT_RE = re.compile(r"<attachment[^>]*/?>", re.IGNORECASE)
+_TAG_RE = re.compile(r"<[^>]+>")
+_WS_RE = re.compile(r"[ \t\r\f\v]+")
+
+
+def clean_prompt_text(content: str | None, content_type: str | None) -> str | None:
+    """Return clean human-readable prompt text.
+
+    Mirrors the original solution's text-vs-HTML handling: HTML-bodied prompts
+    have their ``<attachment>`` blocks and tags stripped and entities unescaped;
+    plain-text prompts pass through trimmed. Returns ``None`` for empty results.
+    """
+    if not content:
+        return None
+    text = content
+    if (content_type or "").lower() == "html" or "<" in text:
+        text = _ATTACHMENT_RE.sub(" ", text)
+        text = _SELFCLOSE_ATTACHMENT_RE.sub(" ", text)
+        text = _TAG_RE.sub(" ", text)
+        text = (
+            text.replace("&nbsp;", " ")
+            .replace("&amp;", "&")
+            .replace("&lt;", "<")
+            .replace("&gt;", ">")
+            .replace("&quot;", '"')
+            .replace("&#39;", "'")
+        )
+    text = _WS_RE.sub(" ", text).strip()
+    return text or None
+
+
+def extract_prompt_text(raw: dict[str, Any]) -> str | None:
+    """Pull the prompt text out of a raw Graph interaction body."""
+    body = raw.get("body") or {}
+    return clean_prompt_text(body.get("content"), body.get("contentType"))
+
+
+def transform_interaction(
+    raw: dict[str, Any],
+    user_id: str,
+    translations: Translations | None = None,
+) -> dict[str, Any] | None:
+    """Turn a raw Graph interaction into a **Prompt** row, or ``None`` to drop.
+
+    Returns ``None`` for rows that must be excluded: Copilot's own responses,
+    and any app class marked as excluded (e.g. M365 Admin Center, the
+    system-generated PredictiveChat). ``translations`` defaults to the built-in
+    rules; ingest passes a possibly remote-updated set.
+    """
+    tr = translations or default_translations()
+    app_class = strip_app_prefix(raw.get("appClass"))
+    if tr.is_excluded(app_class):
+        return None
+
+    # Drop Copilot's own responses — only the human prompt counts as usage.
+    if raw.get("interactionType") == AI_RESPONSE_TYPE:
+        return None
+
+    conversation_type = raw.get("conversationType")
+    file_location, teams_location = extract_locations(raw.get("contexts"))
+
+    return {
+        "prompt_id": raw.get("id"),
+        "user_id": user_id,
+        "conversation_id": raw.get("sessionId"),
+        "app_name": normalise_app_name(app_class, tr),
+        "prompt_date": _parse_date(raw.get("createdDateTime")),
+        "conversation_type": conversation_type,
+        "conversation_location": derive_conversation_location(conversation_type),
+        "chat_type": derive_chat_type(conversation_type, app_class),
+        "file_location": file_location,
+        "teams_location": teams_location,
+        "prompt_text": extract_prompt_text(raw),
+        "raw_json": raw,
+    }
+
+
+def has_configured_sku(user: dict[str, Any], sku_ids: list[str]) -> bool:
+    """True when the user holds any of the configured Copilot SKUs."""
+    wanted = set(sku_ids)
+    assigned = {
+        lic.get("skuId") for lic in (user.get("assignedLicenses") or [])
+    }
+    return bool(wanted & assigned)
+
+
+def is_included_entra_user(user: dict[str, Any]) -> bool:
+    """Apply the directory-user inclusion filter used at ingest.
+
+    Keep only enabled members with a real mailbox that is not an
+    ``onmicrosoft.com`` account.
+    """
+    if (user.get("userType") or "").lower() != "member":
+        return False
+    if user.get("accountEnabled") is not True:
+        return False
+    mail = (user.get("mail") or "").strip()
+    if not mail:
+        return False
+    upn = user.get("userPrincipalName") or ""
+    if _ONMICROSOFT in mail.lower() or _ONMICROSOFT in upn.lower():
+        return False
+    return True
+
+
+def transform_entra_user(
+    user: dict[str, Any], *, has_copilot_license: bool = False
+) -> dict[str, Any]:
+    """Map a raw Graph user onto the ``entra_users`` column set."""
+    ext = user.get("onPremisesExtensionAttributes") or {}
+    row: dict[str, Any] = {
+        "user_id": user.get("id"),
+        "upn": user.get("userPrincipalName"),
+        "email": user.get("mail"),
+        "display_name": user.get("displayName"),
+        "job_title": user.get("jobTitle"),
+        "company_name": user.get("companyName"),
+        "department": user.get("department"),
+        "office_location": user.get("officeLocation"),
+        "country": user.get("country"),
+        "manager_id": (user.get("manager") or {}).get("id"),
+        "account_enabled": user.get("accountEnabled"),
+        "user_type": user.get("userType"),
+        "has_copilot_license": has_copilot_license,
+    }
+    for i in range(1, 16):
+        row[f"extension_attribute_{i}"] = ext.get(f"extensionAttribute{i}")
+    return row
+
+
+def transform_subscribed_sku(
+    sku: dict[str, Any], recorded_date: date
+) -> dict[str, Any]:
+    """Map a ``subscribedSku`` entry to a ``license_counts`` row.
+
+    ``available`` is derived as ``enabled - allocated`` (never negative).
+    """
+    prepaid = sku.get("prepaidUnits") or {}
+    enabled = int(prepaid.get("enabled") or 0)
+    allocated = int(sku.get("consumedUnits") or 0)
+    return {
+        "recorded_date": recorded_date,
+        "status": sku.get("capabilityStatus"),
+        "enabled": enabled,
+        "allocated": allocated,
+        "available": max(enabled - allocated, 0),
+        "suspended": int(prepaid.get("suspended") or 0),
+        "warning": int(prepaid.get("warning") or 0),
+        "locked_out": int(prepaid.get("lockedOut") or 0),
+    }
