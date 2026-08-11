@@ -104,7 +104,7 @@ export default function Layout({ children }: { children: ReactNode }) {
             className="h-8 w-8 object-contain"
           />
         </header>
-        <div className="mx-auto max-w-6xl px-8 py-8">{children}</div>
+        <div className="mx-auto max-w-[1800px] px-6 py-8 xl:px-10">{children}</div>
       </main>
     </div>
   );

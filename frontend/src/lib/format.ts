@@ -32,6 +32,17 @@ export function fmtDate(value: string | null | undefined): string {
   return new Date(t).toLocaleDateString();
 }
 
+// Short time-of-day, e.g. "14:32". Falls back to "—" when unparseable.
+export function fmtTime(value: string | null | undefined): string {
+  if (!value) return "—";
+  const t = Date.parse(value);
+  if (Number.isNaN(t)) return "—";
+  return new Date(t).toLocaleTimeString(undefined, {
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
 const GCSE_LABELS: Record<keyof Gcse, string> = {
   goal: "Goal",
   context: "Context",

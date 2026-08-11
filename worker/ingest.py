@@ -50,6 +50,7 @@ _PROMPT_UPDATE_KEYS = [
     "conversation_id",
     "app_name",
     "prompt_date",
+    "created_at",
     "conversation_type",
     "conversation_location",
     "chat_type",

@@ -139,6 +139,16 @@ def _parse_date(value: str | None) -> date | None:
         return None
 
 
+def _parse_datetime(value: str | None) -> datetime | None:
+    """Parse an ISO-8601 timestamp to a timezone-aware ``datetime``."""
+    if not value:
+        return None
+    try:
+        return datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+
+
 # Attachment markers the original flow stripped out of HTML-bodied prompts.
 _ATTACHMENT_RE = re.compile(r"<attachment[^>]*>.*?</attachment>", re.IGNORECASE | re.DOTALL)
 _SELFCLOSE_ATTACHMENT_RE = re.compile(r"<attachment[^>]*/?>", re.IGNORECASE)
@@ -208,6 +218,7 @@ def transform_interaction(
         "conversation_id": raw.get("sessionId"),
         "app_name": normalise_app_name(app_class, tr),
         "prompt_date": _parse_date(raw.get("createdDateTime")),
+        "created_at": _parse_datetime(raw.get("createdDateTime")),
         "conversation_type": conversation_type,
         "conversation_location": derive_conversation_location(conversation_type),
         "chat_type": derive_chat_type(conversation_type, app_class),

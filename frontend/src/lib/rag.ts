@@ -6,6 +6,10 @@ export const RAG_AMBER = "#B9791A";
 export const RAG_RED = "#C8362F";
 export const RAG_NEUTRAL = "#94a3b8";
 
+// A governance confidence >= this counts as "contains a name / sensitive
+// info / profanity" (mirrors the API's FLAG_THRESHOLD).
+export const FLAG_THRESHOLD = 7;
+
 export function ragColor(score: number | null | undefined): string {
   if (score === null || score === undefined || Number.isNaN(score)) return RAG_NEUTRAL;
   if (score >= 7) return RAG_GREEN;

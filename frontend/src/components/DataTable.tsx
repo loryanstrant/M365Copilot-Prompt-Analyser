@@ -37,6 +37,9 @@ interface Props<Row> {
   emptyMessage?: string;
   rowClassName?: (row: Row) => string;
   onRowClick?: (row: Row) => void;
+  /** When set, the table body scrolls within this pixel height and the header
+   * sticks to the top — keeps long tables from pushing the page scrollbar away. */
+  maxBodyHeight?: number;
 }
 
 function isEmpty(v: string | number | null | undefined): boolean {
@@ -74,6 +77,7 @@ export default function DataTable<Row>({
   emptyMessage = "No data yet.",
   rowClassName,
   onRowClick,
+  maxBodyHeight,
 }: Props<Row>) {
   const [sort, setSort] = useState<SortState | null>(initialSort ?? null);
 
@@ -110,10 +114,13 @@ export default function DataTable<Row>({
     a === "right" ? "text-right" : a === "center" ? "text-center" : "text-left";
 
   return (
-    <div className="overflow-x-auto">
+    <div
+      className="overflow-auto"
+      style={maxBodyHeight ? { maxHeight: `${maxBodyHeight}px` } : undefined}
+    >
       <table className="w-full text-sm">
-        <thead>
-          <tr className="text-xs uppercase tracking-wide text-slate-400">
+        <thead className={maxBodyHeight ? "sticky top-0 z-10" : undefined}>
+          <tr className="bg-white text-xs uppercase tracking-wide text-slate-400 dark:bg-slate-800">
             {columns.map((col) => {
               const canSort = col.sortable !== false && !!col.accessor;
               const active = sort?.key === col.key;

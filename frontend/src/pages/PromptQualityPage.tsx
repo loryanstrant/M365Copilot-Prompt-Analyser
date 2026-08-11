@@ -15,16 +15,31 @@ import ChartTooltip from "../components/ChartTooltip";
 import DataTable, { type Column } from "../components/DataTable";
 import EmptyState from "../components/EmptyState";
 import FilterBar from "../components/FilterBar";
+import GovBadge from "../components/GovBadge";
 import KpiCard from "../components/KpiCard";
 import ScoreBadge from "../components/ScoreBadge";
 import { filterDeps, metricsQuery, useFilters } from "../filters/FiltersContext";
-import { gcseToArray } from "../lib/format";
-import { pctSmart, score10, titleCase } from "../lib/format";
+import { gcseToArray, pctSmart, score10, titleCase } from "../lib/format";
 import { ragColor } from "../lib/rag";
 
-const PROMPT_LIMIT = 200;
+const PROMPT_LIMIT = 1000;
 
 const columns: Column<PromptRow>[] = [
+  {
+    key: "user",
+    header: "User",
+    accessor: (r) => r.user_name,
+    render: (r) => (
+      <div className="min-w-[8rem]" title={r.department ?? undefined}>
+        <div className="font-medium text-slate-800 dark:text-slate-100">
+          {r.user_name || "—"}
+        </div>
+        {r.department && (
+          <div className="text-xs text-slate-400">{r.department}</div>
+        )}
+      </div>
+    ),
+  },
   {
     key: "prompt",
     header: "Prompt",
@@ -40,6 +55,7 @@ const columns: Column<PromptRow>[] = [
   },
   { key: "category", header: "Category", accessor: (r) => r.category, render: (r) => titleCase(r.category) },
   { key: "app", header: "App", accessor: (r) => r.app },
+  { key: "source", header: "Source", accessor: (r) => r.source },
   {
     key: "sentiment",
     header: "Sentiment",
@@ -54,10 +70,62 @@ const columns: Column<PromptRow>[] = [
     accessor: (r) => r.quality_score,
     render: (r) => <ScoreBadge score={r.quality_score} />,
   },
-  { key: "goal", header: "G", type: "number", align: "center", accessor: (r) => r.gcse_goal, render: (r) => <ScoreBadge score={r.gcse_goal} /> },
-  { key: "context", header: "C", type: "number", align: "center", accessor: (r) => r.gcse_context, render: (r) => <ScoreBadge score={r.gcse_context} /> },
-  { key: "source", header: "S", type: "number", align: "center", accessor: (r) => r.gcse_source, render: (r) => <ScoreBadge score={r.gcse_source} /> },
-  { key: "expectation", header: "E", type: "number", align: "center", accessor: (r) => r.gcse_expectation, render: (r) => <ScoreBadge score={r.gcse_expectation} /> },
+  {
+    key: "goal",
+    header: "G",
+    type: "number",
+    align: "center",
+    accessor: (r) => r.gcse_goal,
+    render: (r) => <span title="Goal"><ScoreBadge score={r.gcse_goal} /></span>,
+  },
+  {
+    key: "context",
+    header: "C",
+    type: "number",
+    align: "center",
+    accessor: (r) => r.gcse_context,
+    render: (r) => <span title="Context"><ScoreBadge score={r.gcse_context} /></span>,
+  },
+  {
+    key: "src",
+    header: "S",
+    type: "number",
+    align: "center",
+    accessor: (r) => r.gcse_source,
+    render: (r) => <span title="Source"><ScoreBadge score={r.gcse_source} /></span>,
+  },
+  {
+    key: "expectation",
+    header: "E",
+    type: "number",
+    align: "center",
+    accessor: (r) => r.gcse_expectation,
+    render: (r) => <span title="Expectation"><ScoreBadge score={r.gcse_expectation} /></span>,
+  },
+  {
+    key: "name",
+    header: "Name",
+    type: "number",
+    align: "center",
+    accessor: (r) => r.name_confidence,
+    render: (r) => <GovBadge score={r.name_confidence} label="Name" />,
+  },
+  {
+    key: "sensitive",
+    header: "Sensitive",
+    type: "number",
+    align: "center",
+    accessor: (r) => r.sensitive_confidence,
+    render: (r) => <GovBadge score={r.sensitive_confidence} label="Sensitive info" />,
+  },
+  {
+    key: "profanity",
+    header: "Profanity",
+    type: "number",
+    align: "center",
+    accessor: (r) => r.curse_confidence,
+    render: (r) => <GovBadge score={r.curse_confidence} label="Profanity" />,
+  },
   {
     key: "rationale",
     header: "Rationale",
@@ -138,7 +206,7 @@ export default function PromptQualityPage() {
         </p>
       </div>
 
-      <FilterBar />
+      <FilterBar showFlags />
 
       <EmptyState show={loaded && !hasData} />
 
@@ -183,7 +251,10 @@ export default function PromptQualityPage() {
 
       <div className="card">
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 px-5 py-4 dark:border-slate-700">
-          <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-200">Prompts</h3>
+          <div className="flex items-baseline gap-3">
+            <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-200">Prompts</h3>
+            <span className="text-xs text-slate-400">{prompts.length} prompts</span>
+          </div>
           <input
             type="text"
             value={search}
@@ -198,6 +269,7 @@ export default function PromptQualityPage() {
           initialSort={{ key: "quality", dir: "desc" }}
           emptyMessage="No prompts match this selection."
           columns={columns}
+          maxBodyHeight={560}
         />
       </div>
     </div>

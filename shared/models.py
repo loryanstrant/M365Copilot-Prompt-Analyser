@@ -41,6 +41,8 @@ class Prompt(Base):
     conversation_id: Mapped[str | None] = mapped_column(Text, index=True)
     app_name: Mapped[str | None] = mapped_column(Text)
     prompt_date: Mapped[date | None] = mapped_column(Date, index=True)
+    # Full timestamp of the prompt (orders the per-conversation thread).
+    created_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     conversation_type: Mapped[str | None] = mapped_column(Text)
     # "App" or "Chat".
     conversation_location: Mapped[str | None] = mapped_column(Text)
