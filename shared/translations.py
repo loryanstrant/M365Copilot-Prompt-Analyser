@@ -29,6 +29,7 @@ DEFAULT_APP_NAMES: dict[str, str] = {
     "bizchat": "Copilot Chat",
     "webchat": "Copilot Chat",
     "privatechat": "Copilot Chat",
+    "proactivechat": "Copilot Chat",
     "vivaengage": "Viva Engage",
     "officecopilotsearchanswer": "Copilot Search",
 }

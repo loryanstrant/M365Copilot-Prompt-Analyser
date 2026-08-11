@@ -1,11 +1,12 @@
 {
-  "version": 1,
-  "updated": "2026-07-30",
+  "version": 2,
+  "updated": "2026-08-11",
   "_comment": "Central app-name translations for the M365 Copilot Prompt Analyser. Deployed instances fetch this file periodically and merge it OVER their built-in defaults, so renames/new surfaces/exclusions can be rolled out without redeploying. Keys are the prefix-stripped Graph appClass, lowercased. 'app_names' maps a raw appClass to a friendly display name; 'excluded_apps' lists appClasses that are system-generated or not genuine human usage and must be dropped at ingest.",
   "app_names": {
     "bizchat": "Copilot Chat",
     "webchat": "Copilot Chat",
     "privatechat": "Copilot Chat",
+    "proactivechat": "Copilot Chat",
     "vivaengage": "Viva Engage",
     "officecopilotsearchanswer": "Copilot Search"
   },
