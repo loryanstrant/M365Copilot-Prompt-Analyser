@@ -106,6 +106,12 @@ docker compose up --build
 - **API + Swagger:** http://localhost:8000/docs
 - **Health:** http://localhost:8000/health
 
+> **Running alongside the sibling solutions?** Set `WEB_PORT`, `API_PORT` and
+> `DB_PORT` in `.env` to avoid host-port clashes (defaults `5173` / `8000` /
+> `5432`). Only the host side changes — container-internal wiring is unaffected,
+> so nothing else needs updating. Adjust the URLs above to match your `WEB_PORT`
+> / `API_PORT`.
+
 Sign in with `ADMIN_USERNAME` / `ADMIN_PASSWORD` from `.env`, open **Settings**,
 enter:
 1. **Microsoft Graph** — tenant / client / secret (app-only, permissions

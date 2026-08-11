@@ -41,6 +41,11 @@ export default function LoginPage() {
     <div className="flex h-full items-center justify-center px-4">
       <div className="card w-full max-w-sm p-8">
         <div className="mb-6 text-center">
+          <img
+            src="/copilot-logo.png"
+            alt="Microsoft 365 Copilot"
+            className="mx-auto mb-3 h-14 w-14 object-contain"
+          />
           <div className="text-sm font-semibold text-brand-600 dark:text-brand-500">M365 Copilot</div>
           <h1 className="text-xl font-bold">Prompt Analyser</h1>
           <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">Sign in to continue</p>
