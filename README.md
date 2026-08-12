@@ -7,6 +7,43 @@ OpenAI model for quality / GCSE / sentiment / category scoring and sensitive-inf
 detection, stores the results in PostgreSQL, and serves a web dashboard. Runs
 anywhere via Docker and deploys to Azure Container Apps.
 
+## Screenshots
+
+### Executive summary
+At-a-glance KPIs (conversations, average prompt quality, user-generated share,
+sentiment, high-quality rate, weakest GCSE lever) plus the conversation-quality
+distribution and sentiment mix.
+
+![Executive summary](docs/screenshots/executive-summary.png)
+
+### Prompt quality
+Per-prompt scoring (1–10) across the four GCSE levers, the quality distribution,
+and a searchable, sortable table with per-prompt sentiment, source and the
+name / sensitive-info / profanity governance signals.
+
+![Prompt quality](docs/screenshots/prompt-quality.png)
+
+### Conversations
+Session-level themes, sentiment and both the **average-of-prompts** and holistic
+**conversation** score. Selecting a conversation opens the full narrative
+(insight, theme, suggested improvement, suggested starter prompt) and the ordered
+prompt thread with each prompt's scores.
+
+![Conversation detail](docs/screenshots/conversation-detail.png)
+
+### Personal coaching
+"Act as" any user to see the coaching view they'd get — their KPIs, a focus-area
+callout, GCSE-vs-team comparison, and their conversations.
+
+![Personal coaching](docs/screenshots/personal-coaching.png)
+
+### Usage breakdown & dark mode
+Per-app and per-intent volume and average quality, category mix, and GCSE-by-intent.
+Every page supports a light and dark theme.
+
+![Usage breakdown](docs/screenshots/usage-breakdown.png)
+![Executive summary in dark mode](docs/screenshots/executive-summary-dark.png)
+
 ## Deploy to Azure (one click)
 
 [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Floryanstrant%2FM365Copilot-Prompt-Analyser%2Fmain%2Finfra%2Fazuredeploy.json/createUIDefinitionUri/https%3A%2F%2Fraw.githubusercontent.com%2Floryanstrant%2FM365Copilot-Prompt-Analyser%2Fmain%2Finfra%2FcreateUiDefinition.json)
