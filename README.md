@@ -23,6 +23,79 @@ complete the in-app **Settings** to connect Microsoft Graph and Azure OpenAI.
 > (`m365copilot-prompt-analyser/api` and `.../worker`) to **Public** once, so Container
 > Apps can pull them anonymously. See [`docs/deploy.md`](docs/deploy.md).
 
+## After it's deployed
+
+**1. Open the dashboard.** In the portal, go to your resource group → open the deployment (or
+Deployments → the `Microsoft.Template` run) → **Outputs** → copy **`dashboardUrl`**. That is your app.
+It's served by the **`…-api-…`** Container App (the `…-worker-…` one has no web UI — it just runs
+ingestion + analysis in the background). You can also get the URL from the api Container App's
+**Overview → Application Url**.
+
+**2. Sign in.** Username is what you set as **admin username** (default `admin`); password is the
+**admin password** you chose at deploy time.
+
+**3. Connect Microsoft Graph and Azure OpenAI.** Go to **Settings**. The first-run wizard walks you
+through creating an Entra **app registration** with the two application permissions
+(`AiEnterpriseInteraction.Read.All`, `Directory.Read.All`, admin-consented) and a client secret —
+or reuse the Usage Reporter's app registration, which already has them. Paste **Tenant ID**,
+**Client ID**, **Client secret**, then **Test connection**. Under **Azure OpenAI**, paste your
+**endpoint**, **deployment** (default `gpt-5.4-mini`), **api-version** and **key**, then
+**Test Azure OpenAI**.
+
+**4. Load and analyse data.** Click **Refresh now** for the last 24 hours, or open **Backfill** to
+pull history (default 30 days). Ingest automatically runs the analysis stage; you can also trigger
+**Run analysis** from Settings. The **Data status** card shows Prompts / Conversations; the
+**Backfill** page has a run history table with per-run stats.
+
+> **First run needs licensed users.** The backfill iterates your Copilot-**licensed** users, so run
+> an ingest (**Refresh now**) at least once first — that populates the licensed-user snapshot. A
+> backfill that "completes instantly with no data" almost always means **zero Copilot-licensed
+> users** were found: check **Test connection**'s *Copilot-licensed users* count, and if it's 0 the
+> configured **Copilot SKU ID** doesn't match any assigned licences (default is Microsoft 365
+> Copilot, `639dec6b-bb19-468b-871c-c5c441c4b0cb`).
+
+### Enabling Entra ID single sign-on (optional)
+
+By default the dashboard is protected by the single admin password. You can additionally let
+colleagues sign in with their **work account** (read-only viewer role) via **Container Apps Easy
+Auth** — administration stays behind the password. You can turn this on **at deploy time or later**.
+
+**One-time prerequisite (either path):** an Entra **app registration** for sign-in (you can reuse
+the analyser's own). Note its **Application (client) ID**, create a **client secret**, and after
+deployment add the redirect URI `https://<your-dashboardUrl>/.auth/login/aad/callback` under
+**Authentication → Web**. If you plan to restrict viewers to a security group, also add a **groups**
+claim under **Token configuration**.
+
+**Option A — at deploy time (recommended):** on the **Deploy to Azure** form, open the
+**Authentication** tab and set **Enable Entra ID single sign-on = Yes**, then paste the app
+registration **client ID**, **client secret**, and (optional) **tenant ID**. Everything is wired up
+automatically; grab the **`entraRedirectUriToRegister`** deployment output and add it to the app
+registration as above.
+
+**Option B — after deployment:** open the **`…-api-…`** Container App → **Settings →
+Authentication** → **Add identity provider** → **Microsoft**, use your app registration's client ID
++ secret, and set *unauthenticated requests* to **Allow** (the app still gates admin behind the
+password; SSO users become viewers). Add the redirect URI as above.
+
+Either way, once enabled the sign-in page shows a **"Sign in with Microsoft"** button and returning
+users are signed in silently. To restrict who may view, set a **report access group** on the
+**Settings** page — only members of that Entra group are admitted.
+
+Full details: [`docs/deploy.md`](docs/deploy.md#entra-single-sign-on-optional).
+
+### Where to find run history, logs, and errors
+
+- **In the app:** **Settings → Data status** (last run + counts) and **Backfill** (per-run history
+  table with prompts/lookback/status). A failed run shows its error message in the run's stats.
+- **Container logs (the real detail):** manual **Refresh now**, **Backfill** and **Run analysis**
+  run inside the **`…-api-…`** Container App, so their logs live there — open it → **Monitoring →
+  Log stream** (live), or **Logs** to query `ContainerAppConsoleLogs_CL`. The scheduled background
+  ingest + analysis runs in the **`…-worker-…`** Container App — check its log stream for
+  scheduled-run errors.
+- **Analysis errors** (e.g. Azure OpenAI throttling or a bad deployment name) surface in the
+  analysis run's stats and the api/worker log stream. Confirm the deployment + key with **Test Azure
+  OpenAI** on the Settings page.
+
 This is a sibling of
 [`M365Copilot-Usage-Reporter`](https://github.com/loryanstrant/M365Copilot-Usage-Reporter)
 and [`AgentQualityReporter`](https://github.com/loryanstrant/AgentQualityReporter)
