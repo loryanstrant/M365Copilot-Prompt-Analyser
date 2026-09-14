@@ -184,6 +184,13 @@ class AppConfig(Base):
         StrArray, default=["639dec6b-bb19-468b-871c-c5c441c4b0cb"]
     )
     report_access_group_id: Mapped[str | None] = mapped_column(Text)
+    # Membership of this group unlocks the organisation-wide view. Blank means
+    # the org view is open to everyone who can sign in, which is how the app
+    # behaved before the personal view existed. Kept separate from
+    # report_access_group_id: that one decides who may open the report at all,
+    # and repurposing it would hand a personal view to people a tenant had
+    # deliberately excluded.
+    org_view_group_id: Mapped[str | None] = mapped_column(Text)
     backfill_days: Mapped[int] = mapped_column(Integer, default=30)
     schedule_cron: Mapped[str | None] = mapped_column(Text)
     # --- Azure OpenAI (analysis engine) ---

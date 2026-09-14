@@ -10,6 +10,12 @@ import { api, getToken, setToken } from "../api/client";
 export interface User {
   username: string;
   role: string;
+  // Whether this person may see organisation-wide data. Evaluated per request
+  // by the API from the configured Entra group, not baked into the token.
+  can_view_org: boolean;
+  // Whether there is an Entra identity to scope a personal view to. False for
+  // the password admin, who therefore lands on the organisation view.
+  has_personal_view: boolean;
 }
 
 interface AuthContextValue {
@@ -73,7 +79,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       { method: "POST", body: JSON.stringify({ username, password }) },
     );
     setToken(res.access_token);
-    setUser({ username: res.username, role: res.role });
+    // Ask the API who this is rather than synthesising a user from the login
+    // response: capabilities such as org access are decided server-side.
+    setUser(await api<User>("/auth/me"));
   }
 
   function logout() {

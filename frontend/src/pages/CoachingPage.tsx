@@ -1,12 +1,8 @@
-// The signed-in person's own coaching.
-//
-// Everything here comes from /metrics/me/*, which derives the person from the
-// token. There is deliberately no person picker and no user id in any URL: if
-// the page could name a user, anyone could read anyone else's prompts by
-// editing the address bar. Picking a person is an organisation activity and
-// lives on CoachingPage, behind the organisation-view gate.
+// The people picker. This shows anybody's coaching, so it is an ORGANISATION
+// tool, not a personal one — the route is gated on can_view_org and the
+// endpoints it calls sit behind require_org_view. Somebody's own coaching lives
+// on PersonalPage, which takes no user id at all.
 import { useEffect, useMemo, useState } from "react";
-import { Link } from "react-router-dom";
 import {
   Bar,
   BarChart,
@@ -17,19 +13,20 @@ import {
   YAxis,
 } from "recharts";
 import { api } from "../api/client";
-import type { ConversationRow, PersonalCoaching } from "../api/types";
-import { useAuth } from "../auth/AuthContext";
+import type { ConversationRow, PersonalCoaching, Person } from "../api/types";
 import ChartCard from "../components/ChartCard";
 import ChartTooltip from "../components/ChartTooltip";
 import ConversationDrawer from "../components/ConversationDrawer";
 import DataTable, { type Column } from "../components/DataTable";
+import EmptyState from "../components/EmptyState";
 import GovBadge from "../components/GovBadge";
 import KpiCard from "../components/KpiCard";
 import ScoreBadge from "../components/ScoreBadge";
 import { CHART_COLORS } from "../components/chartTheme";
 import { gcseToArray, pctSmart, score10, titleCase } from "../lib/format";
 
-// No "User" column: every row here belongs to the person reading the page.
+// Conversation columns for the person's own list — same as the Conversations
+// page but without the redundant User column (everything is one person).
 const convColumns: Column<ConversationRow>[] = [
   {
     key: "theme",
@@ -81,63 +78,52 @@ const convColumns: Column<ConversationRow>[] = [
   },
 ];
 
-function OrgViewBanner({ canViewOrg }: { canViewOrg: boolean }) {
-  // The switch is shown locked rather than hidden: people should be able to see
-  // that organisation reporting exists and who to ask, instead of wondering
-  // whether the app is broken.
-  return (
-    <div className="card flex flex-wrap items-center justify-between gap-4 p-5">
-      {canViewOrg ? (
-        <>
-          <div>
-            <div className="font-medium text-slate-800 dark:text-slate-100">
-              Looking for everyone else?
-            </div>
-            <div className="text-sm text-slate-500 dark:text-slate-400">
-              You have access to organisation-wide reporting.
-            </div>
-          </div>
-          <Link to="/summary" className="btn-primary whitespace-nowrap">
-            View organisation data →
-          </Link>
-        </>
-      ) : (
-        <>
-          <div>
-            <div className="font-medium text-slate-800 dark:text-slate-100">
-              Organisation view
-            </div>
-            <div className="text-sm text-slate-500 dark:text-slate-400">
-              🔒 Organisation-wide reporting is limited to an approved group. Ask
-              your administrator if you need access.
-            </div>
-          </div>
-          <button className="btn-secondary whitespace-nowrap" disabled>
-            Not available
-          </button>
-        </>
-      )}
-    </div>
-  );
+function personLabel(p: Person): string {
+  const dept = p.department ? ` · ${p.department}` : "";
+  return `${p.name}${dept} (${p.prompts} prompts)`;
 }
 
-export default function PersonalPage() {
-  const { user } = useAuth();
+export default function CoachingPage() {
+  const [people, setPeople] = useState<Person[]>([]);
+  const [peopleLoaded, setPeopleLoaded] = useState(false);
+  const [userId, setUserId] = useState<string>("");
+
   const [coaching, setCoaching] = useState<PersonalCoaching | null>(null);
   const [conversations, setConversations] = useState<ConversationRow[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
   const [selectedConv, setSelectedConv] = useState<string | null>(null);
 
+  // Load the person roster once, defaulting to the first person.
   useEffect(() => {
+    (async () => {
+      try {
+        const list = await api<Person[]>("/metrics/people");
+        setPeople(list);
+        if (list.length) setUserId(list[0].user_id);
+      } catch {
+        /* ignore */
+      } finally {
+        setPeopleLoaded(true);
+      }
+    })();
+  }, []);
+
+  // Load coaching + conversations whenever the selected person changes.
+  useEffect(() => {
+    if (!userId) return;
     let cancelled = false;
     (async () => {
       setLoading(true);
-      setError(null);
+      setCoaching(null);
+      setConversations([]);
+      setSelectedConv(null);
       try {
+        const params = new URLSearchParams();
+        params.set("user", userId);
+        params.set("limit", "1000");
         const [c, convs] = await Promise.all([
-          api<PersonalCoaching>("/metrics/me/coaching"),
-          api<ConversationRow[]>("/metrics/me/conversations?limit=1000"),
+          api<PersonalCoaching>(`/metrics/personal/${encodeURIComponent(userId)}`),
+          api<ConversationRow[]>(`/metrics/conversations?${params.toString()}`),
         ]);
         if (!cancelled) {
           setCoaching(c);
@@ -145,9 +131,8 @@ export default function PersonalPage() {
         }
       } catch {
         if (!cancelled) {
-          setError(
-            "We couldn't load your coaching view. Sign in with your work account to see your own prompts.",
-          );
+          setCoaching(null);
+          setConversations([]);
         }
       } finally {
         if (!cancelled) setLoading(false);
@@ -156,7 +141,7 @@ export default function PersonalPage() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [userId]);
 
   const chartData = useMemo(() => {
     const mine = gcseToArray(coaching?.gcse_mine ?? null);
@@ -168,50 +153,49 @@ export default function PersonalPage() {
     }));
   }, [coaching]);
 
-  const hasData = (coaching?.prompts ?? 0) > 0;
+  const hasPeople = people.length > 0;
 
   return (
     <div className="space-y-8">
       <div>
-        <h1 className="text-2xl font-bold">Your coaching</h1>
+        <h1 className="text-2xl font-bold">People coaching</h1>
         <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
-          How you prompt Microsoft 365 Copilot, and where to sharpen it.
+          Act as a person to see the coaching view they would get.
         </p>
       </div>
 
-      <OrgViewBanner canViewOrg={user?.can_view_org ?? false} />
+      <EmptyState show={peopleLoaded && !hasPeople} />
 
-      {error && (
-        <div className="rounded-lg bg-amber-50 px-4 py-3 text-sm text-amber-800 dark:bg-amber-900/20 dark:text-amber-400">
-          {error}
+      {hasPeople && (
+        <div className="card flex flex-wrap items-end gap-3 p-4">
+          <div className="min-w-[20rem] flex-1">
+            <label className="mb-1 block text-xs font-medium text-slate-500 dark:text-slate-400">
+              Act as
+            </label>
+            <select
+              value={userId}
+              onChange={(e) => setUserId(e.target.value)}
+              className="input w-full"
+            >
+              {people.map((p) => (
+                <option key={p.user_id} value={p.user_id}>
+                  {personLabel(p)}
+                </option>
+              ))}
+            </select>
+          </div>
         </div>
       )}
 
-      {loading && <div className="muted text-sm">Loading your coaching…</div>}
+      {loading && <div className="muted text-sm">Loading coaching…</div>}
 
-      {!loading && !error && !hasData && (
-        <div className="card p-10 text-center">
-          <h2 className="mb-2 text-lg font-semibold text-slate-800 dark:text-slate-100">
-            Nothing to show yet
-          </h2>
-          <p className="mx-auto max-w-md text-sm text-slate-500 dark:text-slate-400">
-            We can&rsquo;t find any analysed prompts for your account. That usually
-            means you haven&rsquo;t used Copilot since reporting started, or the
-            latest prompts haven&rsquo;t been analysed yet.
-          </p>
-        </div>
-      )}
-
-      {!loading && !error && hasData && coaching && (
+      {!loading && coaching && (
         <>
           <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
-            <KpiCard label="Your prompts" value={coaching.prompts} />
-            <KpiCard label="Your conversations" value={coaching.conversations} />
+            <KpiCard label="Prompts" value={coaching.prompts} />
+            <KpiCard label="Conversations" value={coaching.conversations} />
             <KpiCard label="Avg quality" value={score10(coaching.avg_quality)} />
-            <KpiCard
-              label="User-generated"
-              value={pctSmart(coaching.user_generated_pct)}
-            />
+            <KpiCard label="User-generated" value={pctSmart(coaching.user_generated_pct)} />
           </div>
 
           <div className="rounded-xl border border-brand-200 bg-brand-50 p-5 dark:border-brand-900/40 dark:bg-brand-900/20">
@@ -219,32 +203,27 @@ export default function PersonalPage() {
               Focus area
             </div>
             <div className="mt-1 text-sm text-slate-700 dark:text-slate-200">
-              Your weakest lever is{" "}
+              {coaching.name}&rsquo;s weakest lever is{" "}
               <span className="font-semibold">{titleCase(coaching.weakest_lever)}</span>
               {coaching.strongest_lever && (
                 <>
                   {" "}
-                  — your strongest is{" "}
-                  <span className="font-semibold">
-                    {titleCase(coaching.strongest_lever)}
-                  </span>
+                  — strongest is{" "}
+                  <span className="font-semibold">{titleCase(coaching.strongest_lever)}</span>
                 </>
               )}
-              . Sharpening the weakest lever gives the biggest gain.
+              . Coaching should prioritise sharpening the weakest lever.
             </div>
           </div>
 
-          <ChartCard
-            title="GCSE vs team"
-            subtitle="Your levers compared with the team average"
-          >
+          <ChartCard title="GCSE vs team" subtitle="Your levers compared with the team average">
             <ResponsiveContainer width="100%" height={300}>
               <BarChart data={chartData} margin={{ left: -20, right: 8, top: 8 }} barGap={4}>
                 <XAxis dataKey="lever" tick={{ fontSize: 12 }} stroke="#94a3b8" />
                 <YAxis tick={{ fontSize: 11 }} stroke="#94a3b8" domain={[0, 10]} />
                 <Tooltip content={<ChartTooltip />} cursor={{ fill: "rgba(148,163,184,0.12)" }} />
                 <Legend />
-                <Bar dataKey="mine" name="You" fill={CHART_COLORS[0]} radius={[4, 4, 0, 0]} />
+                <Bar dataKey="mine" name="This person" fill={CHART_COLORS[0]} radius={[4, 4, 0, 0]} />
                 <Bar dataKey="team" name="Team average" fill={CHART_COLORS[2]} radius={[4, 4, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
@@ -260,7 +239,7 @@ export default function PersonalPage() {
               rows={conversations}
               getRowKey={(r) => r.conversation_id}
               initialSort={{ key: "conversation", dir: "desc" }}
-              emptyMessage="No conversations of yours have been analysed yet."
+              emptyMessage="No conversations for this person."
               columns={convColumns}
               maxBodyHeight={420}
               rowClassName={(r) =>
@@ -275,7 +254,6 @@ export default function PersonalPage() {
           {selectedConv && (
             <ConversationDrawer
               conversationId={selectedConv}
-              personal
               onClose={() => setSelectedConv(null)}
             />
           )}

@@ -55,6 +55,7 @@ export default function SettingsPage() {
   const [skuIds, setSkuIds] = useState(DEFAULT_SKU);
   const [scheduleHours, setScheduleHours] = useState(24);
   const [groupId, setGroupId] = useState("");
+  const [orgViewGroupId, setOrgViewGroupId] = useState("");
   const [redirectUri, setRedirectUri] = useState("");
 
   // Azure OpenAI
@@ -73,6 +74,7 @@ export default function SettingsPage() {
     setSkuIds((cfg.copilot_sku_ids ?? []).join(", ") || DEFAULT_SKU);
     setScheduleHours(cfg.schedule_interval_hours ?? 24);
     setGroupId(cfg.report_access_group_id ?? "");
+    setOrgViewGroupId(cfg.org_view_group_id ?? "");
     setAoaiEndpoint(cfg.aoai_endpoint ?? "");
     setAoaiDeployment(cfg.aoai_deployment ?? "");
     setAoaiApiVersion(cfg.aoai_api_version ?? "");
@@ -122,6 +124,7 @@ export default function SettingsPage() {
         copilot_sku_ids: skuIds.split(",").map((s) => s.trim()).filter(Boolean),
         schedule_interval_hours: scheduleHours,
         report_access_group_id: groupId,
+        org_view_group_id: orgViewGroupId,
         aoai_endpoint: aoaiEndpoint,
         aoai_deployment: aoaiDeployment,
         aoai_api_version: aoaiApiVersion,
@@ -345,6 +348,17 @@ export default function SettingsPage() {
               hint="Optional Entra security group whose members may view the report via single sign-on. Leave blank to allow any signed-in user."
             >
               <input value={groupId} onChange={(e) => setGroupId(e.target.value)} className="input" />
+            </Field>
+
+            <Field
+              label="Organisation view group ID"
+              hint="Optional Entra security group whose members may see organisation-wide reporting. Leave blank to let every signed-in user see it. Everyone with a work account keeps their own personal coaching view either way. Kept separate from the report access group above, which decides who may open the report at all."
+            >
+              <input
+                value={orgViewGroupId}
+                onChange={(e) => setOrgViewGroupId(e.target.value)}
+                className="input"
+              />
             </Field>
 
             <div className="flex flex-wrap gap-3 pt-2">

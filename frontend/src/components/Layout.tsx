@@ -23,9 +23,19 @@ function BrandMark() {
   );
 }
 
+function NavSectionLabel({ children }: { children: ReactNode }) {
+  return (
+    <div className="px-3 pb-1 pt-4 text-[11px] font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">
+      {children}
+    </div>
+  );
+}
+
 export default function Layout({ children }: { children: ReactNode }) {
   const { user, logout } = useAuth();
   const { theme, toggle } = useTheme();
+  const canViewOrg = user?.can_view_org ?? false;
+  const hasPersonal = user?.has_personal_view ?? false;
 
   return (
     <div className="flex h-full">
@@ -43,31 +53,52 @@ export default function Layout({ children }: { children: ReactNode }) {
           </div>
         </div>
         <nav className="flex-1 space-y-1 px-3">
-          <NavLink to="/" className={navClass} end>
-            Executive summary
-          </NavLink>
-          <NavLink to="/usage" className={navClass}>
-            Usage breakdown
-          </NavLink>
-          <NavLink to="/quality" className={navClass}>
-            Prompt quality
-          </NavLink>
-          <NavLink to="/conversations" className={navClass}>
-            Conversations
-          </NavLink>
-          <NavLink to="/personal" className={navClass}>
-            Personal coaching
-          </NavLink>
-          {user?.role === "admin" && (
-            <NavLink to="/settings" className={navClass}>
-              Settings
-            </NavLink>
+          {hasPersonal && (
+            <>
+              <NavSectionLabel>You</NavSectionLabel>
+              <NavLink to="/me" className={navClass}>
+                Your coaching
+              </NavLink>
+            </>
           )}
-          {user?.role === "admin" && (
-            <NavLink to="/backfill" className={navClass}>
-              Backfill
-            </NavLink>
+
+          {/* Organisation links are hidden for people without access — the
+              locked state is explained once, on the personal page, rather than
+              as a row of dead links. */}
+          {canViewOrg && (
+            <>
+              <NavSectionLabel>Organisation</NavSectionLabel>
+              <NavLink to="/summary" className={navClass}>
+                Executive summary
+              </NavLink>
+              <NavLink to="/usage" className={navClass}>
+                Usage breakdown
+              </NavLink>
+              <NavLink to="/quality" className={navClass}>
+                Prompt quality
+              </NavLink>
+              <NavLink to="/conversations" className={navClass}>
+                Conversations
+              </NavLink>
+              <NavLink to="/coaching" className={navClass}>
+                People coaching
+              </NavLink>
+            </>
           )}
+
+          {user?.role === "admin" && (
+            <>
+              <NavSectionLabel>Administration</NavSectionLabel>
+              <NavLink to="/settings" className={navClass}>
+                Settings
+              </NavLink>
+              <NavLink to="/backfill" className={navClass}>
+                Backfill
+              </NavLink>
+            </>
+          )}
+
+          <NavSectionLabel>Help</NavSectionLabel>
           <NavLink to="/help" className={navClass}>
             Setup guide
           </NavLink>

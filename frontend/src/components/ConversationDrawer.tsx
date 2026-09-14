@@ -105,9 +105,14 @@ const threadColumns: Column<ThreadRow>[] = [
 export default function ConversationDrawer({
   conversationId,
   onClose,
+  personal = false,
 }: {
   conversationId: string;
   onClose?: () => void;
+  // Read through the personal endpoint, which confirms the thread belongs to
+  // the signed-in person. The organisation endpoint is gated, so someone
+  // without org access could not open their own conversation through it.
+  personal?: boolean;
 }) {
   const [detail, setDetail] = useState<ConversationDetail | null>(null);
   const [loading, setLoading] = useState(false);
@@ -121,7 +126,7 @@ export default function ConversationDrawer({
       setDetail(null);
       try {
         const d = await api<ConversationDetail>(
-          `/metrics/conversations/${encodeURIComponent(conversationId)}`,
+          `${personal ? "/metrics/me/conversations" : "/metrics/conversations"}/${encodeURIComponent(conversationId)}`,
         );
         if (!cancelled) setDetail(d);
       } catch {
@@ -133,7 +138,7 @@ export default function ConversationDrawer({
     return () => {
       cancelled = true;
     };
-  }, [conversationId]);
+  }, [conversationId, personal]);
 
   const conv = detail?.conversation ?? null;
   const rows: ThreadRow[] = (detail?.prompts ?? []).map((p, i) => ({ ...p, _idx: i + 1 }));
