@@ -7,7 +7,7 @@ import AboutPage from "./pages/AboutPage";
 import BackfillPage from "./pages/BackfillPage";
 import CoachingPage from "./pages/CoachingPage";
 import ConversationsPage from "./pages/ConversationsPage";
-import ExecutiveSummaryPage from "./pages/ExecutiveSummaryPage";
+import OverviewPage from "./pages/OverviewPage";
 import LoginPage from "./pages/LoginPage";
 import PersonalPage from "./pages/PersonalPage";
 import PromptQualityPage from "./pages/PromptQualityPage";
@@ -49,7 +49,7 @@ export default function App() {
   ) : user.has_personal_view ? (
     <PersonalPage />
   ) : (
-    <ExecutiveSummaryPage />
+    <OverviewPage />
   );
 
   return (
@@ -58,7 +58,9 @@ export default function App() {
         <Routes>
           <Route path="/" element={landing} />
           <Route path="/me" element={<PersonalPage />} />
-          <Route path="/summary" element={org(<ExecutiveSummaryPage />)} />
+          <Route path="/overview" element={org(<OverviewPage />)} />
+          {/* The overview used to live at /summary; keep old links working. */}
+          <Route path="/summary" element={<Navigate to="/overview" replace />} />
           <Route path="/usage" element={org(<UsageBreakdownPage />)} />
           <Route path="/quality" element={org(<PromptQualityPage />)} />
           <Route path="/conversations" element={org(<ConversationsPage />)} />

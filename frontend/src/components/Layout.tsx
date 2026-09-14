@@ -68,8 +68,8 @@ export default function Layout({ children }: { children: ReactNode }) {
           {canViewOrg && (
             <>
               <NavSectionLabel>Organisation</NavSectionLabel>
-              <NavLink to="/summary" className={navClass}>
-                Executive summary
+              <NavLink to="/overview" className={navClass}>
+                Overview
               </NavLink>
               <NavLink to="/usage" className={navClass}>
                 Usage breakdown
@@ -92,16 +92,10 @@ export default function Layout({ children }: { children: ReactNode }) {
               <NavLink to="/settings" className={navClass}>
                 Settings
               </NavLink>
-              <NavLink to="/backfill" className={navClass}>
-                Backfill
-              </NavLink>
             </>
           )}
 
           <NavSectionLabel>Help</NavSectionLabel>
-          <NavLink to="/help" className={navClass}>
-            Setup guide
-          </NavLink>
           <NavLink to="/about" className={navClass}>
             About
           </NavLink>

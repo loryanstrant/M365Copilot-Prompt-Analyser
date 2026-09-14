@@ -32,7 +32,7 @@ import { ragColor } from "../lib/rag";
 
 const BAR_COLOR = "#3b6ef5";
 
-export default function ExecutiveSummaryPage() {
+export default function OverviewPage() {
   const filters = useFilters();
   const [summary, setSummary] = useState<MetricsSummary | null>(null);
   const [convQual, setConvQual] = useState<ScoreBucket[]>([]);
@@ -79,7 +79,7 @@ export default function ExecutiveSummaryPage() {
   return (
     <div className="space-y-8">
       <div>
-        <h1 className="text-2xl font-bold">Executive summary</h1>
+        <h1 className="text-2xl font-bold">Overview</h1>
         <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
           M365 Copilot prompt &amp; conversation quality at a glance.
         </p>

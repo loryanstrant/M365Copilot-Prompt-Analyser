@@ -258,6 +258,22 @@ export default function SettingsPage() {
 
       <DemoDataCard />
 
+      <div className="card p-6">
+        <h3 className="mb-1 text-sm font-semibold text-slate-700 dark:text-slate-200">
+          Setup guide
+        </h3>
+        <p className="mb-4 text-xs text-slate-400 dark:text-slate-500">
+          App registration, Graph permissions and the Azure OpenAI deployment — plus what
+          to check when something looks wrong.
+        </p>
+        <Link
+          to="/help"
+          className="inline-flex items-center gap-1 rounded-lg border border-brand-300 bg-brand-50 px-4 py-2 text-sm font-semibold text-brand-700 hover:bg-brand-100 dark:border-brand-700 dark:bg-brand-900/20 dark:text-brand-400"
+        >
+          Open setup guide →
+        </Link>
+      </div>
+
       <SetupWizard defaultOpen={!status?.configured} />
 
       <form onSubmit={onSave} className="space-y-8">
