@@ -225,17 +225,44 @@ Copy-Item .env.example .env
 python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
 # paste the printed value into FERNET_KEY in .env
 
-# 2. Start the full stack (api + worker + postgres + frontend)
-docker compose up --build
+# 2. Start the production stack (api + worker + postgres)
+docker compose up -d
 ```
 
-- **Dashboard:** http://localhost:5173
-- **API + Swagger:** http://localhost:8000/docs
-- **Health:** http://localhost:8000/health
+- **Dashboard + API:** http://localhost:8003
+- **API + Swagger:** http://localhost:8003/docs
+- **Health:** http://localhost:8003/health
 
-> **Running alongside the sibling solutions?** Set `WEB_PORT`, `API_PORT` and
-> `DB_PORT` in `.env` to avoid host-port clashes (defaults `5173` / `8000` /
-> `5432`). Only the host side changes — container-internal wiring is unaffected.
+This is the production stack: it runs prebuilt images with no bind mounts and no
+auto-reload, and the API serves the built dashboard itself — so there is no separate
+frontend container or web port. `docker compose up` pulls the published images; add
+`--build` to build them locally instead.
+
+Every solution in the suite owns a distinct port block, so all four can run side by
+side without clashing:
+
+| Solution | API / dashboard | Postgres |
+|---|---|---|
+| M365 Copilot Usage Reporter | 8000 | 5432 |
+| M365 Copilot Cowork Reporter | 8001 | 5433 |
+| Copilot Studio Agent Quality Reporter | 8002 | 5434 |
+| **M365 Copilot Prompt Analyser** | **8003** | **5435** |
+
+Override `API_PORT` / `DB_PORT` in `.env` to move them. Only the host side changes —
+container-internal wiring is unaffected.
+
+### Developing against it
+
+For hot-reload while working on the code, layer the dev override on top. It builds
+locally, bind-mounts the source, enables `uvicorn --reload` and runs the Vite dev
+server:
+
+```powershell
+docker compose -f docker-compose.yml -f docker-compose.dev.yml up --build
+```
+
+The dev dashboard is then on http://localhost:5176 (`WEB_PORT`), with the API still
+on 8003.
 
 On first start an admin login is seeded from `ADMIN_USERNAME` / `ADMIN_PASSWORD` in `.env`
 (defaults `admin` / `change-me` — change these).
