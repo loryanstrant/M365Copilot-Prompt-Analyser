@@ -174,7 +174,11 @@ async def seed_demo(
     conversations: int = 40, reset: bool = True
 ) -> IngestRunOut:
     """Seed synthetic prompt-analysis data so the dashboards render without
-    live Microsoft Graph / Azure OpenAI. Intended for demos and local trials."""
+    live Microsoft Graph / Azure OpenAI.
+
+    Explicit action only — nothing is ever seeded automatically on deploy.
+    Credentials and app user accounts are never touched.
+    """
     from scripts.seed_demo import seed
 
     conversations = max(1, min(conversations, 2000))
@@ -182,6 +186,22 @@ async def seed_demo(
     return IngestRunOut(
         status="seeded",
         detail=f"Seeded {stats['prompts']} prompts across {stats['conversations']} conversations.",
+    )
+
+
+@router.post("/clear-demo", response_model=IngestRunOut)
+async def clear_demo() -> IngestRunOut:
+    """Remove all seeded data, leaving credentials and accounts intact.
+
+    Run this before your first production run so demo numbers can't be mistaken
+    for real ones.
+    """
+    from scripts.seed_demo import clear
+
+    await clear()
+    return IngestRunOut(
+        status="cleared",
+        detail="Demo data removed. Run now to load live data from Microsoft Graph.",
     )
 
 

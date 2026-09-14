@@ -11,6 +11,7 @@ import os
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
+from shared.version import APP_VERSION
 from fastapi.responses import JSONResponse
 from sqlalchemy import text
 
@@ -65,7 +66,7 @@ async def lifespan(_: FastAPI):
 
 app = FastAPI(
     title="M365 Copilot Prompt Analyser",
-    version="0.1.0",
+    version=APP_VERSION,
     description=(
         "Ingests Microsoft 365 Copilot prompts, analyses them with Azure OpenAI, "
         "and serves a prompt-quality dashboard."
