@@ -97,7 +97,7 @@ function OrgViewBanner({ canViewOrg }: { canViewOrg: boolean }) {
               You have access to organisation-wide reporting.
             </div>
           </div>
-          <Link to="/summary" className="btn-primary whitespace-nowrap">
+          <Link to="/overview" className="btn-primary whitespace-nowrap">
             View organisation data →
           </Link>
         </>

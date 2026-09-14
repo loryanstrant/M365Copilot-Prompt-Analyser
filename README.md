@@ -12,12 +12,12 @@ licence, no Power Platform, and no data leaves your subscription. Runs anywhere 
 > Community project, MIT-licensed. Not covered by a Microsoft support agreement.
 ## Screenshots
 
-### Executive summary
+### Overview
 At-a-glance KPIs (conversations, average prompt quality, user-generated share,
 sentiment, high-quality rate, weakest GCSE lever) plus the conversation-quality
 distribution and sentiment mix.
 
-![Executive summary](docs/screenshots/executive-summary.png)
+![Overview](docs/screenshots/executive-summary.png)
 
 ### Prompt quality
 Per-prompt scoring (1–10) across the four GCSE levers, the quality distribution,
@@ -45,7 +45,7 @@ Per-app and per-intent volume and average quality, category mix, and GCSE-by-int
 Every page supports a light and dark theme.
 
 ![Usage breakdown](docs/screenshots/usage-breakdown.png)
-![Executive summary in dark mode](docs/screenshots/executive-summary-dark.png)
+![Overview in dark mode](docs/screenshots/executive-summary-dark.png)
 
 
 ## Deploy to Azure (one click)
@@ -78,10 +78,10 @@ or reuse the Usage Reporter's app registration, which already has them. Paste **
 **endpoint**, **deployment** (default `gpt-5.4-mini`), **api-version** and **key**, then
 **Test Azure OpenAI**.
 
-**4. Load and analyse data.** Select **Run now** for the last 24 hours, or open **Backfill** to
-pull history (default 30 days). Ingest automatically runs the analysis stage; you can also trigger
-**Run analysis** from Settings. The **Data status** card shows Prompts / Conversations; the
-**Backfill** page has a run history table with per-run stats.
+**4. Load and analyse data.** Select **Run now** for the last 24 hours, or open **Settings →
+Historical backfill** to pull history (default 30 days). Ingest automatically runs the analysis
+stage; you can also trigger **Run analysis** from Settings. The **Data status** card shows
+Prompts / Conversations; the **Backfill** page has a run history table with per-run stats.
 
 > **First run needs licensed users.** The backfill iterates your Copilot-**licensed** users, so run
 > an ingest (**Refresh now**) at least once first — that populates the licensed-user snapshot. A
@@ -124,7 +124,7 @@ conversations, quality score and GCSE levers. That view is derived entirely from
 identity in the token: there is no user parameter anywhere in it, so nobody can read someone else's
 coaching by editing a URL.
 
-The organisation-wide pages (executive summary, usage breakdown, prompt quality, conversations, and
+The organisation-wide pages (overview, usage breakdown, prompt quality, conversations, and
 the **People coaching** picker) are gated separately by an **Organisation view group ID** in
 **Settings**:
 
@@ -141,8 +141,9 @@ group takes effect in minutes instead of at their next sign-in.
 
 ### Where to find run history, logs, and errors
 
-- **In the app:** **Settings → Data status** (last run + counts) and **Backfill** (per-run history
-  table with prompts/lookback/status). A failed run shows its error message in the run's stats.
+- **In the app:** **Settings → Data status** (last run + counts) and **Settings → Historical
+  backfill** (per-run history table with prompts/lookback/status). A failed run shows its error
+  message in the run's stats.
 - **Container logs (the real detail):** manual **Refresh now**, **Backfill** and **Run analysis**
   run inside the **`…-api-…`** Container App, so their logs live there — open it → **Monitoring →
   Log stream** (live), or **Logs** to query `ContainerAppConsoleLogs_CL`. The scheduled background
@@ -160,7 +161,7 @@ one-click Azure deploy). The one addition here is an **LLM analysis stage**.
 
 ## What it does
 
-- **Executive summary** — KPIs (conversations, average prompt quality, user-generated share,
+- **Overview** — KPIs (conversations, average prompt quality, user-generated share,
   sentiment, high-quality rate, weakest GCSE lever) plus the conversation-quality distribution.
 - **Usage breakdown** — volume and quality split by app, department, office and category.
 - **Prompt quality** — GCSE lever scores (Goal, Context, Source, Expectation), quality trends,
@@ -297,7 +298,8 @@ On first start an admin login is seeded from `ADMIN_USERNAME` / `ADMIN_PASSWORD`
 3. **Settings** → follow the guided wizard to create the app registration, then enter Tenant ID,
    Client ID and Client secret, and **Test connection**.
 4. Under **Azure OpenAI**, enter endpoint, deployment, api-version and key, then **Test Azure OpenAI**.
-5. **Run now** (pulls and analyses recent prompts) or start **Backfill** for history.
+5. **Run now** (pulls and analyses recent prompts) or start a **Historical backfill** from Settings
+   for history.
 6. Explore the dashboard.
 
 Just evaluating? Skip steps 3–5 and use **Settings → Demo data → Load demo data** instead.
