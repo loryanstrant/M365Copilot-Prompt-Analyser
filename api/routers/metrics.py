@@ -184,3 +184,15 @@ async def get_personal(
 @router.get("/freshness")
 async def get_freshness(session: AsyncSession = Depends(get_session)):
     return await metrics.freshness(session)
+
+
+@router.get("/about")
+async def get_about() -> dict:
+    """Version and build metadata for the About page."""
+    from shared.version import APP_VERSION, BUILD_DATE, BUILD_TIME
+
+    return {
+        "version": APP_VERSION,
+        "build_date": BUILD_DATE,
+        "build_time": BUILD_TIME,
+    }

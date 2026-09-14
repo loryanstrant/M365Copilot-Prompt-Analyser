@@ -2,7 +2,14 @@ import { useEffect, useState } from "react";
 import { api } from "../api/client";
 import type { Freshness } from "../api/types";
 import KpiCard from "../components/KpiCard";
+import SuiteBlock from "../components/SuiteBlock";
 import { RAG_AMBER, RAG_GREEN, RAG_RED } from "../lib/rag";
+
+interface AboutMeta {
+  version: string;
+  build_date: string;
+  build_time: string;
+}
 
 function fmtDay(value: string | null): string {
   if (!value) return "—";
@@ -13,11 +20,17 @@ function fmtDay(value: string | null): string {
 
 export default function AboutPage() {
   const [fresh, setFresh] = useState<Freshness | null>(null);
+  const [meta, setMeta] = useState<AboutMeta | null>(null);
 
   useEffect(() => {
     (async () => {
       try {
         setFresh(await api<Freshness>("/metrics/freshness"));
+      } catch {
+        /* ignore */
+      }
+      try {
+        setMeta(await api<AboutMeta>("/metrics/about"));
       } catch {
         /* ignore */
       }
@@ -35,7 +48,7 @@ export default function AboutPage() {
 
       <div className="card p-6 text-sm leading-relaxed text-slate-600 dark:text-slate-300">
         <h3 className="mb-3 text-sm font-semibold text-slate-700 dark:text-slate-200">
-          What is the Prompt Analyser?
+          What this is
         </h3>
         <p>
           The M365 Copilot Prompt Analyser ingests Microsoft 365 Copilot prompts and
@@ -43,6 +56,21 @@ export default function AboutPage() {
           conversation is rated for quality, sentiment, grounding and sensitivity so
           you can coach users and track improvement over time.
         </p>
+        {meta && (
+          <p className="mt-4 text-xs text-slate-500 dark:text-slate-400">
+            Version{" "}
+            <span className="font-semibold text-slate-700 dark:text-slate-200">
+              {meta.version}
+            </span>{" "}
+            · built{" "}
+            {new Date(meta.build_date).toLocaleDateString(undefined, {
+              year: "numeric",
+              month: "short",
+              day: "numeric",
+            })}
+            {meta.build_time ? ` at ${meta.build_time}` : ""}
+          </p>
+        )}
       </div>
 
       <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
@@ -105,6 +133,8 @@ export default function AboutPage() {
         </div>
       </div>
 
+      <SuiteBlock />
+
       <div className="card flex items-center gap-4 p-6">
         <img
           src="/loryan-cyborg.png"
@@ -141,6 +171,10 @@ export default function AboutPage() {
             </a>
           </div>
         </div>
+      </div>
+
+      <div className="text-xs text-slate-400 dark:text-slate-500">
+        MIT-licensed. Community project — no Microsoft support agreement or SLA.
       </div>
     </div>
   );

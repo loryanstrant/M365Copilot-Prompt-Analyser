@@ -16,7 +16,7 @@ function navClass({ isActive }: { isActive: boolean }): string {
 function BrandMark() {
   return (
     <img
-      src="/copilot-logo.png"
+      src="/app-logo.png"
       alt="Microsoft 365 Copilot"
       className="h-9 w-9 shrink-0 rounded-lg object-contain"
     />
@@ -68,6 +68,9 @@ export default function Layout({ children }: { children: ReactNode }) {
               Backfill
             </NavLink>
           )}
+          <NavLink to="/help" className={navClass}>
+            Setup guide
+          </NavLink>
           <NavLink to="/about" className={navClass}>
             About
           </NavLink>
@@ -96,15 +99,8 @@ export default function Layout({ children }: { children: ReactNode }) {
           </div>
         </div>
       </aside>
-      <main className="flex-1 overflow-auto">
-        <header className="flex items-center justify-end border-b border-slate-200 bg-white/70 px-8 py-3 backdrop-blur dark:border-slate-700 dark:bg-slate-800/70">
-          <img
-            src="/copilot-logo.png"
-            alt="Microsoft 365 Copilot"
-            className="h-8 w-8 object-contain"
-          />
-        </header>
-        <div className="mx-auto max-w-[1800px] px-6 py-8 xl:px-10">{children}</div>
+      <main className="min-w-0 flex-1 overflow-auto">
+        <div className="mx-auto w-full max-w-[1600px] px-8 py-8">{children}</div>
       </main>
     </div>
   );

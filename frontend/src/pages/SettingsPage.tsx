@@ -2,6 +2,7 @@ import { useEffect, useState, type FormEvent } from "react";
 import { Link } from "react-router-dom";
 import { api, ApiError } from "../api/client";
 import SetupWizard from "../components/SetupWizard";
+import DemoDataCard from "../components/DemoDataCard";
 import type {
   AppConfig,
   IngestRunResult,
@@ -245,6 +246,8 @@ export default function SettingsPage() {
         </div>
       )}
 
+      <DemoDataCard />
+
       <SetupWizard defaultOpen={!status?.configured} />
 
       <form onSubmit={onSave} className="space-y-8">
@@ -328,7 +331,7 @@ export default function SettingsPage() {
                 disabled={ingesting}
                 className="rounded-lg border border-brand-300 bg-brand-50 px-4 py-2 text-sm font-semibold text-brand-700 hover:bg-brand-100 disabled:opacity-60 dark:border-brand-700 dark:bg-brand-900/20 dark:text-brand-400"
               >
-                {ingesting ? "Starting…" : "Refresh now"}
+                {ingesting ? "Starting…" : "Run now"}
               </button>
             </div>
           </div>
@@ -467,7 +470,7 @@ export default function SettingsPage() {
 
           <div className="flex flex-wrap gap-3 pt-2">
             <button type="submit" disabled={saving} className="btn-primary">
-              {saving ? "Saving…" : "Save settings"}
+              {saving ? "Saving…" : "Save"}
             </button>
             <button
               type="button"

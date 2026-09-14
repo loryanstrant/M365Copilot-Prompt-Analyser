@@ -175,14 +175,33 @@ async def seed(conversations: int, reset: bool) -> dict[str, int]:
     return {"conversations": conversations, "prompts": n_prompts}
 
 
+async def clear() -> dict[str, int]:
+    """Remove all seeded prompt/analysis data.
+
+    Only touches the three analysis tables — credentials (``app_config``) and
+    user accounts (``app_users``) are never affected.
+    """
+    async with SessionLocal() as session:
+        await session.execute(delete(ConversationAnalysis))
+        await session.execute(delete(PromptAnalysis))
+        await session.execute(delete(Prompt))
+        await session.commit()
+    return {"cleared": 1}
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Seed demo prompt-analysis data.")
     parser.add_argument("--conversations", type=int, default=40)
     parser.add_argument("--reset", action="store_true")
+    parser.add_argument("--clear", action="store_true", help="Clear data and exit")
     args = parser.parse_args()
     # psycopg async needs a SelectorEventLoop on Windows (no-op elsewhere).
     if sys.platform == "win32":
         asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
+    if args.clear:
+        asyncio.run(clear())
+        print("Demo data cleared.")
+        return
     stats = asyncio.run(seed(args.conversations, args.reset))
     print(f"Seeded {stats['prompts']} prompts across {stats['conversations']} conversations.")
 

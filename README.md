@@ -1,12 +1,15 @@
-# M365 Copilot Prompt Analyser (containerised)
+# M365 Copilot Prompt Analyser
 
-A self-hosted, containerised replacement for the Power Platform + Power BI **M365
-Copilot Prompt Analyser**. It ingests Microsoft 365 Copilot prompts from Microsoft
-Graph (app-only / client credentials), sends each **conversation** to an Azure
-OpenAI model for quality / GCSE / sentiment / category scoring and sensitive-info
-detection, stores the results in PostgreSQL, and serves a web dashboard. Runs
-anywhere via Docker and deploys to Azure Container Apps.
+Self-hosted prompt-quality reporting for **Microsoft 365 Copilot**. It ingests prompts from
+Microsoft Graph, sends each conversation to Azure OpenAI for quality, GCSE, sentiment and
+category scoring plus sensitive-information detection, stores the results in PostgreSQL, and
+serves a web dashboard. A replacement for the Power Platform + Power BI version — no Power BI
+licence, no Power Platform, and no data leaves your subscription. Runs anywhere with
+`docker compose up`, or deploys to Azure Container Apps in one click.
 
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Floryanstrant%2FM365Copilot-Prompt-Analyser%2Fmain%2Finfra%2Fazuredeploy.json/createUIDefinitionUri/https%3A%2F%2Fraw.githubusercontent.com%2Floryanstrant%2FM365Copilot-Prompt-Analyser%2Fmain%2Finfra%2FcreateUiDefinition.json)
+
+> Community project, MIT-licensed. Not covered by a Microsoft support agreement.
 ## Screenshots
 
 ### Executive summary
@@ -44,9 +47,8 @@ Every page supports a light and dark theme.
 ![Usage breakdown](docs/screenshots/usage-breakdown.png)
 ![Executive summary in dark mode](docs/screenshots/executive-summary-dark.png)
 
-## Deploy to Azure (one click)
 
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Floryanstrant%2FM365Copilot-Prompt-Analyser%2Fmain%2Finfra%2Fazuredeploy.json/createUIDefinitionUri/https%3A%2F%2Fraw.githubusercontent.com%2Floryanstrant%2FM365Copilot-Prompt-Analyser%2Fmain%2Finfra%2FcreateUiDefinition.json)
+## Deploy to Azure (one click)
 
 The button provisions everything into a resource group of your choice: a PostgreSQL
 flexible server, a Container Apps environment, and the **api** + **worker** container
@@ -55,10 +57,7 @@ an **admin password** — the database password and encryption keys are generate
 you. When the deployment finishes, open the `dashboardUrl` output, sign in, and
 complete the in-app **Settings** to connect Microsoft Graph and Azure OpenAI.
 
-> **Maintainers:** the button relies on public images. After the first run of the
-> **Publish container images** workflow, set both GHCR packages
-> (`m365copilot-prompt-analyser/api` and `.../worker`) to **Public** once, so Container
-> Apps can pull them anonymously. See [`docs/deploy.md`](docs/deploy.md).
+To deploy from source with `azd` instead, see [`docs/deploy.md`](docs/deploy.md).
 
 ## After it's deployed
 
@@ -79,7 +78,7 @@ or reuse the Usage Reporter's app registration, which already has them. Paste **
 **endpoint**, **deployment** (default `gpt-5.4-mini`), **api-version** and **key**, then
 **Test Azure OpenAI**.
 
-**4. Load and analyse data.** Click **Refresh now** for the last 24 hours, or open **Backfill** to
+**4. Load and analyse data.** Select **Run now** for the last 24 hours, or open **Backfill** to
 pull history (default 30 days). Ingest automatically runs the analysis stage; you can also trigger
 **Run analysis** from Settings. The **Data status** card shows Prompts / Conversations; the
 **Backfill** page has a run history table with per-run stats.
@@ -139,65 +138,83 @@ and [`AgentQualityReporter`](https://github.com/loryanstrant/AgentQualityReporte
 and shares their scaffold (Python/FastAPI engine, Postgres, React dashboard,
 one-click Azure deploy). The one addition here is an **LLM analysis stage**.
 
-## What it replaces
+## What it does
 
-The original solution was a Power Platform managed solution (4 Dataverse tables +
-6 Power Automate flows) plus a Power BI report:
+- **Executive summary** — KPIs (conversations, average prompt quality, user-generated share,
+  sentiment, high-quality rate, weakest GCSE lever) plus the conversation-quality distribution.
+- **Usage breakdown** — volume and quality split by app, department, office and category.
+- **Prompt quality** — GCSE lever scores (Goal, Context, Source, Expectation), quality trends,
+  and the prompts most in need of help.
+- **Conversations** — drill into any conversation, see its per-prompt scores and governance flags.
+- **Personal coaching** — a per-person view with specific, actionable suggestions.
+- **Settings (admin)** — Graph and Azure OpenAI config (secrets write-only, Fernet-encrypted),
+  a guided app-registration wizard, test connection, run now, demo data, and a resumable
+  **backfill** with live progress.
+- **Entra single sign-on (optional)** — colleagues view the report with their work account
+  (read-only), optionally gated to an Entra security group.
+- Global filters, CSV export, and a **light/dark** theme throughout.
 
-| Original (Power Platform) | Here |
+### How the scoring works
+
+- **Model-agnostic.** The Azure OpenAI **deployment name** is configuration, not code. Default is
+  **`gpt-5.4-mini`**; switch to a larger model for higher accuracy or a smaller one for lower cost
+  in **Settings**, with no redeploy.
+- **One call per conversation.** Quality scoring and sensitivity detection are merged into a single
+  call per conversation, turning `1 + N` model calls into `1`. Set the analysis mode to `split` to
+  run them separately (e.g. to route sensitivity to a cheaper model or an external PII service).
+- **Structured Outputs.** Responses are constrained by a JSON schema, so parsing never relies on the
+  model avoiding markdown.
+- **Incremental and idempotent.** Only unanalysed prompts are picked up, and each conversation is
+  analysed as a unit so its aggregate scores stay consistent.
+
+## Prerequisites & permissions
+
+- A **Global Administrator** (or Privileged Role Administrator plus Application Administrator) to
+  create the app registration and grant admin consent.
+- Microsoft 365 Copilot licences assigned in the tenant.
+- An **Azure OpenAI** deployment — endpoint, key and deployment name. The analysis stage cannot run
+  without it.
+- PowerShell 7 with the Microsoft Graph SDK, if you'd rather script the registration.
+
+The app registration needs these **application** permissions (not delegated), both admin-consented.
+If you already run the M365 Copilot Usage Reporter, you can reuse its app registration as-is.
+
+| Permission | Why |
 | --- | --- |
-| `DAILYCoordinator` + 3 child flows + manual importer | `worker` (async ingest + analysis; APScheduler cron / Container Apps Job) |
-| Graph `getAllEnterpriseInteractions` (client secret) | `worker/graph.py` (MSAL client credentials, paged, throttle-aware) — **reuse the same app registration** |
-| AI Builder "prompt & conversation analyser" prompt | `shared/analysis_prompts.py` → Azure OpenAI (Structured Outputs) |
-| AI Builder "sensitivity evaluator" prompt (per prompt) | merged into the same call by default (see below) |
-| Dataverse JSON-blob tables | relational Postgres (`prompts`, `prompt_analysis`, `conversation_analysis`) |
-| Power BI report (5 pages) | React dashboard (rebuilt from the HTML mock-ups) |
+| `AiEnterpriseInteraction.Read.All` | Reads Copilot enterprise interaction history — the prompts that get analysed. |
+| `Directory.Read.All` | Resolves users and departments so prompt quality can be grouped and filtered. |
 
-## The analysis engine
+The in-app **Setup guide** page and the Settings wizard both carry a one-shot PowerShell script that
+creates the registration, grants consent and prints the three values you need:
 
-* **Model-agnostic.** The Azure OpenAI **deployment name** is configuration, not
-  code. Default is **`gpt-5.4-mini`** (a current GA Azure OpenAI model); switch to
-  `gpt-5.6-terra` for higher accuracy or `gpt-5.4-nano` for lowest cost in
-  **Settings**, no redeploy. Endpoint / api-version / key are entered in Settings
-  and the key is stored Fernet-encrypted (never in the image).
-* **One call per conversation (default).** The original ran the analyser once per
-  conversation **and** the sensitivity prompt once *per prompt*. Here both are
-  merged into a **single call per conversation** (`analysis_mode="combined"`) —
-  turning `1 + N` model calls into `1`. Set `analysis_mode="split"` to run them
-  separately (e.g. to route sensitivity to a cheaper model or an external PII
-  service).
-* **Structured Outputs.** Responses are constrained by a JSON schema, so parsing
-  never relies on the model avoiding markdown; it falls back to `json_object` if a
-  model/api-version does not support `json_schema`.
-* **Incremental & idempotent.** Only prompts with `analysed = False` are picked
-  up; each conversation is analysed as a unit so its aggregate scores stay
-  consistent. Concurrency is bounded (`ANALYSIS_CONCURRENCY`) to respect AOAI
-  quotas.
+```powershell
+# Run in PowerShell 7 with the Microsoft Graph SDK.
+# Requires a Global Administrator (or Privileged Role + Application admin).
+Install-Module Microsoft.Graph -Scope CurrentUser -Force  # first time only
+Connect-MgGraph -Scopes "Application.ReadWrite.All","AppRoleAssignment.ReadWrite.All"
 
-Prompt wording lives in `shared/analysis_prompts.py` (ported verbatim in intent
-from the two original AI Builder prompts) — edit it freely; the JSON *shape* is
-enforced separately in `shared/llm.py`.
+$graphSp = Get-MgServicePrincipal -Filter "appId eq '00000003-0000-0000-c000-000000000000'"
+$needed  = "AiEnterpriseInteraction.Read.All","Directory.Read.All"
+$roles   = $graphSp.AppRoles | Where-Object { $needed -contains $_.Value }
 
-## Stack
+$app = New-MgApplication -DisplayName "M365 Copilot Prompt Analyser" -RequiredResourceAccess @{
+  ResourceAppId  = "00000003-0000-0000-c000-000000000000"
+  ResourceAccess = @($roles | ForEach-Object { @{ Id = $_.Id; Type = "Role" } })
+}
+$sp = New-MgServicePrincipal -AppId $app.AppId
 
-- **Engine / API:** Python 3.12, FastAPI, SQLAlchemy 2.x (async), Alembic, httpx,
-  MSAL, APScheduler, Pydantic v2, psycopg v3, **openai** (Azure OpenAI).
-- **Database:** PostgreSQL 16 (schema via Alembic).
-- **Frontend:** React + Vite + TypeScript + Tailwind + Recharts.
-- **Packaging:** Docker + docker-compose. Deploy: `azd` + Bicep → Azure Container Apps.
+# Grant admin consent for both application permissions
+foreach ($r in $roles) {
+  New-MgServicePrincipalAppRoleAssignment -ServicePrincipalId $sp.Id `
+    -PrincipalId $sp.Id -ResourceId $graphSp.Id -AppRoleId $r.Id | Out-Null
+}
 
-## Repo layout
+$secret = Add-MgApplicationPassword -ApplicationId $app.Id `
+  -PasswordCredential @{ DisplayName = "prompt-analyser"; EndDateTime = (Get-Date).AddYears(1) }
 
-```
-/api         FastAPI: routes, auth, metrics, serves built frontend
-/worker      engine: Graph client, transforms, LLM analysis, scheduler, backfill
-/shared      SQLAlchemy models, db, config, crypto, llm, analysis prompts
-/frontend    React + Vite app (5 dashboard pages)
-/infra       Bicep + azure.yaml (azd) + one-click Deploy to Azure
-/alembic     migrations
-/tests       pytest
-docker-compose.yml
-.env.example
+Write-Host "Tenant ID:     $((Get-MgContext).TenantId)"
+Write-Host "Client ID:     $($app.AppId)"
+Write-Host "Client secret: $($secret.SecretText)"
 ```
 
 ## Quick start (local)
@@ -218,41 +235,37 @@ docker compose up --build
 
 > **Running alongside the sibling solutions?** Set `WEB_PORT`, `API_PORT` and
 > `DB_PORT` in `.env` to avoid host-port clashes (defaults `5173` / `8000` /
-> `5432`). Only the host side changes — container-internal wiring is unaffected,
-> so nothing else needs updating. Adjust the URLs above to match your `WEB_PORT`
-> / `API_PORT`.
+> `5432`). Only the host side changes — container-internal wiring is unaffected.
 
-Sign in with `ADMIN_USERNAME` / `ADMIN_PASSWORD` from `.env`, open **Settings**,
-enter:
-1. **Microsoft Graph** — tenant / client / secret (app-only, permissions
-   `AiEnterpriseInteraction.Read.All` + `Directory.Read.All`), **Test connection**.
-2. **Azure OpenAI** — endpoint, deployment (e.g. `gpt-5.4-mini`), api-version, key,
-   **Test AOAI**.
+On first start an admin login is seeded from `ADMIN_USERNAME` / `ADMIN_PASSWORD` in `.env`
+(defaults `admin` / `change-me` — change these).
 
-Then **Run ingest** (pulls + analyses recent prompts) or **Run backfill** for
-history. Ingest automatically triggers analysis unless `ANALYSE_AFTER_INGEST=false`.
+## First-run checklist
 
-## Terminology
+1. `docker compose up` (or deploy to Azure).
+2. Sign in with `ADMIN_USERNAME` / `ADMIN_PASSWORD` (seeded automatically on first start).
+3. **Settings** → follow the guided wizard to create the app registration, then enter Tenant ID,
+   Client ID and Client secret, and **Test connection**.
+4. Under **Azure OpenAI**, enter endpoint, deployment, api-version and key, then **Test Azure OpenAI**.
+5. **Run now** (pulls and analyses recent prompts) or start **Backfill** for history.
+6. Explore the dashboard.
 
-Microsoft Graph uses "session" and "interaction"; this project renames them
-everywhere to **Conversation** (`conversation_id`) and **Prompt** (`prompt_id`).
+Just evaluating? Skip steps 3–5 and use **Settings → Demo data → Load demo data** instead.
 
-## Data model
+## Data & privacy notes
 
-- **prompts** — one row per human prompt, incl. `prompt_text` and the sensitivity
-  confidences (`name_confidence`, `sensitive_confidence`, `curse_confidence`) and
-  an `analysed` flag.
-- **prompt_analysis** — per-prompt quality / GCSE (goal/context/source/expectation)
-  / sentiment / category + rationale.
-- **conversation_analysis** — per-conversation sentiment, avg & overall quality,
-  user-generated ratio, theme, insight, category, improvement, suggested starter
-  prompt.
-- plus `entra_users`, `licensed_users`, `license_counts`, `app_config`,
-  `ingest_state`, `job_runs`, `app_users` (inherited from the sibling scaffold).
+- Prompt text is sent to **your own** Azure OpenAI deployment for scoring and is never sent to any
+  third-party service. All data stays in your subscription.
+- Conversation text is retained so you can drill into a conversation and see why it scored as it
+  did. If that isn't acceptable in your tenant, restrict who can sign in using the report-access
+  group.
+- The Graph **client secret** and the Azure OpenAI **key** are encrypted at rest with a Fernet key
+  and are write-only in the API: they can be set and replaced, never read back.
+- Governance signals flag prompts that appear to contain names or sensitive information so you can
+  coach people — they are not a substitute for Purview DLP.
+- Demo data is clearly labelled as such in Settings, and is only ever created or removed by an
+  explicit action.
 
-## Tests
+## License
 
-```powershell
-pip install -e ".[dev]"
-pytest
-```
+MIT. Community project — no Microsoft support agreement or SLA.
