@@ -5,6 +5,7 @@ export interface AppConfig {
   has_client_secret: boolean;
   copilot_sku_ids: string[];
   report_access_group_id: string | null;
+  org_view_group_id: string | null;
   schedule_interval_hours: number;
   configured: boolean;
   // Azure OpenAI (analysis engine)

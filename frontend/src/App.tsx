@@ -5,6 +5,7 @@ import { FiltersProvider } from "./filters/FiltersContext";
 import { useSetupStatus } from "./hooks/useSetupStatus";
 import AboutPage from "./pages/AboutPage";
 import BackfillPage from "./pages/BackfillPage";
+import CoachingPage from "./pages/CoachingPage";
 import ConversationsPage from "./pages/ConversationsPage";
 import ExecutiveSummaryPage from "./pages/ExecutiveSummaryPage";
 import LoginPage from "./pages/LoginPage";
@@ -35,20 +36,33 @@ export default function App() {
   // see the usual empty states.
   const needsSetup = checked && !configured && user.role === "admin";
 
+  // Org pages are gated on the server too; this only keeps the SPA from showing
+  // a page that would answer 403. Someone without access is sent to their own
+  // view rather than a dead end.
+  const org = (element: JSX.Element) =>
+    user.can_view_org ? element : <Navigate to="/me" replace />;
+
+  // People with a work-account identity land on their own data; the password
+  // admin has no personal view, so they land on the organisation summary.
+  const landing = needsSetup ? (
+    <Navigate to="/settings" replace />
+  ) : user.has_personal_view ? (
+    <PersonalPage />
+  ) : (
+    <ExecutiveSummaryPage />
+  );
+
   return (
     <FiltersProvider>
       <Layout>
         <Routes>
-          <Route
-            path="/"
-            element={
-              needsSetup ? <Navigate to="/settings" replace /> : <ExecutiveSummaryPage />
-            }
-          />
-          <Route path="/usage" element={<UsageBreakdownPage />} />
-          <Route path="/quality" element={<PromptQualityPage />} />
-          <Route path="/conversations" element={<ConversationsPage />} />
-          <Route path="/personal" element={<PersonalPage />} />
+          <Route path="/" element={landing} />
+          <Route path="/me" element={<PersonalPage />} />
+          <Route path="/summary" element={org(<ExecutiveSummaryPage />)} />
+          <Route path="/usage" element={org(<UsageBreakdownPage />)} />
+          <Route path="/quality" element={org(<PromptQualityPage />)} />
+          <Route path="/conversations" element={org(<ConversationsPage />)} />
+          <Route path="/coaching" element={org(<CoachingPage />)} />
           <Route path="/help" element={<SetupGuidePage />} />
           <Route path="/about" element={<AboutPage />} />
           <Route

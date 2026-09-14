@@ -117,6 +117,28 @@ The sign-in page then shows a **"Sign in with Microsoft"** button.
 
 Full details: [`docs/deploy.md`](docs/deploy.md#entra-single-sign-on-optional).
 
+### Your coaching vs. the organisation view
+
+Anyone signing in with their work account lands on **Your coaching** — their own prompts,
+conversations, quality score and GCSE levers. That view is derived entirely from the signed-in
+identity in the token: there is no user parameter anywhere in it, so nobody can read someone else's
+coaching by editing a URL.
+
+The organisation-wide pages (executive summary, usage breakdown, prompt quality, conversations, and
+the **People coaching** picker) are gated separately by an **Organisation view group ID** in
+**Settings**:
+
+- **Leave it blank** and the organisation view stays open to every signed-in user — which is how the
+  app behaved before personal coaching existed, so upgrading never locks existing viewers out.
+- **Set it to an Entra security group** and only its members (plus the password admin, who always
+  has access) see organisation-wide data. Everyone else keeps their own coaching view and sees the
+  organisation switch shown locked, with a note to ask their administrator.
+
+This is deliberately **not** the same as the **Report access group ID** above it: that one decides
+who can open the report at all, while this one decides who can look beyond themselves. Membership is
+re-checked on every request rather than stamped into the sign-in token, so removing someone from the
+group takes effect in minutes instead of at their next sign-in.
+
 ### Where to find run history, logs, and errors
 
 - **In the app:** **Settings → Data status** (last run + counts) and **Backfill** (per-run history
@@ -144,7 +166,10 @@ one-click Azure deploy). The one addition here is an **LLM analysis stage**.
 - **Prompt quality** — GCSE lever scores (Goal, Context, Source, Expectation), quality trends,
   and the prompts most in need of help.
 - **Conversations** — drill into any conversation, see its per-prompt scores and governance flags.
-- **Personal coaching** — a per-person view with specific, actionable suggestions.
+- **Personal coaching** — every signed-in colleague gets their own coaching view (their prompts,
+  quality and GCSE levers), with the organisation-wide reports gated separately. See
+  [Your coaching vs. the organisation view](#your-coaching-vs-the-organisation-view).
+- **People coaching (organisation)** — pick anyone and see the coaching view they would get.
 - **Settings (admin)** — Graph and Azure OpenAI config (secrets write-only, Fernet-encrypted),
   a guided app-registration wizard, test connection, run now, demo data, and a resumable
   **backfill** with live progress.

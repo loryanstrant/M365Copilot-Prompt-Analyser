@@ -68,7 +68,14 @@ async def test_admin_config_roundtrip_secret_write_only(session):
 
         # /auth/me reflects the role
         me = await client.get("/auth/me", headers=headers)
-        assert me.json() == {"username": "admin", "role": "admin"}
+        assert me.json() == {
+            "username": "admin",
+            "role": "admin",
+            # Admins always clear the org gate; the password admin has no
+            # directory identity, so there is no personal view for them.
+            "can_view_org": True,
+            "has_personal_view": False,
+        }
 
         # Save config including a client secret
         resp = await client.put(
