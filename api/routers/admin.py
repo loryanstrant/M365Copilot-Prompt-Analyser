@@ -61,7 +61,6 @@ def _to_out(cfg: AppConfig | None) -> AppConfigOut:
         schedule_interval_hours=cfg.schedule_interval_hours or 24,
         aoai_endpoint=cfg.aoai_endpoint,
         aoai_deployment=cfg.aoai_deployment or "gpt-5.4-mini",
-        aoai_api_version=cfg.aoai_api_version or "2025-01-01-preview",
         has_aoai_key=bool(cfg.aoai_key_encrypted),
         analysis_mode=cfg.analysis_mode or "combined",
         aoai_configured=bool(cfg.aoai_endpoint and cfg.aoai_key_encrypted),
@@ -117,8 +116,8 @@ async def put_config(
         cfg.aoai_endpoint = body.aoai_endpoint.strip() or None
     if body.aoai_deployment is not None:
         cfg.aoai_deployment = body.aoai_deployment.strip() or None
-    if body.aoai_api_version is not None:
-        cfg.aoai_api_version = body.aoai_api_version.strip() or None
+    # body.aoai_api_version is accepted for wire compatibility and ignored: the
+    # v1 API surface takes no api-version.
     # AOAI key is write-only: only update when a value is supplied.
     if body.aoai_key:
         cfg.aoai_key_encrypted = encrypt(body.aoai_key)

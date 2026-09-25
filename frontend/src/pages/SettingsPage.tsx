@@ -13,7 +13,6 @@ import type {
 
 const DEFAULT_SKU = "639dec6b-bb19-468b-871c-c5c441c4b0cb";
 const DEFAULT_DEPLOYMENT = "gpt-5.4-mini";
-const DEFAULT_API_VERSION = "2025-01-01-preview";
 
 const SCHEDULE_OPTIONS = [
   { hours: 24, label: "Once a day" },
@@ -61,7 +60,6 @@ export default function SettingsPage() {
   // Azure OpenAI
   const [aoaiEndpoint, setAoaiEndpoint] = useState("");
   const [aoaiDeployment, setAoaiDeployment] = useState("");
-  const [aoaiApiVersion, setAoaiApiVersion] = useState("");
   const [aoaiKey, setAoaiKey] = useState("");
   const [hasAoaiKey, setHasAoaiKey] = useState(false);
   const [analysisMode, setAnalysisMode] = useState<"combined" | "split">("combined");
@@ -77,7 +75,6 @@ export default function SettingsPage() {
     setOrgViewGroupId(cfg.org_view_group_id ?? "");
     setAoaiEndpoint(cfg.aoai_endpoint ?? "");
     setAoaiDeployment(cfg.aoai_deployment ?? "");
-    setAoaiApiVersion(cfg.aoai_api_version ?? "");
     setHasAoaiKey(cfg.has_aoai_key);
     setAnalysisMode(cfg.analysis_mode ?? "combined");
     setAoaiConfigured(cfg.aoai_configured);
@@ -127,7 +124,6 @@ export default function SettingsPage() {
         org_view_group_id: orgViewGroupId,
         aoai_endpoint: aoaiEndpoint,
         aoai_deployment: aoaiDeployment,
-        aoai_api_version: aoaiApiVersion,
         analysis_mode: analysisMode,
       };
       if (clientSecret) payload.client_secret = clientSecret;
@@ -465,7 +461,10 @@ export default function SettingsPage() {
           </div>
 
           <div className="grid gap-5 md:grid-cols-2">
-            <Field label="Endpoint" hint="e.g. https://my-resource.openai.azure.com">
+            <Field
+              label="Endpoint"
+              hint="e.g. https://my-resource.openai.azure.com — the /openai/v1 path is added for you"
+            >
               <input
                 value={aoaiEndpoint}
                 onChange={(e) => setAoaiEndpoint(e.target.value)}
@@ -479,15 +478,6 @@ export default function SettingsPage() {
                 value={aoaiDeployment}
                 onChange={(e) => setAoaiDeployment(e.target.value)}
                 placeholder={DEFAULT_DEPLOYMENT}
-                className="input"
-              />
-            </Field>
-
-            <Field label="API version">
-              <input
-                value={aoaiApiVersion}
-                onChange={(e) => setAoaiApiVersion(e.target.value)}
-                placeholder={DEFAULT_API_VERSION}
                 className="input"
               />
             </Field>

@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import os
 
-APP_VERSION = "1.1.0"
+APP_VERSION = "1.2.0"
 
 
 def _stamp(name: str) -> str | None:
