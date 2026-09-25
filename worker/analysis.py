@@ -28,7 +28,6 @@ from shared.crypto import decrypt
 from shared.llm import (
     AzureOpenAIProvider,
     ConversationAnalyser,
-    DEFAULT_API_VERSION,
     DEFAULT_MODEL,
     LLMError,
 )
@@ -82,11 +81,13 @@ def build_analyser(config: AppConfig) -> ConversationAnalyser:
     if not (config.aoai_endpoint and config.aoai_key_encrypted):
         raise AnalysisError("Azure OpenAI is not configured.")
     key = decrypt(config.aoai_key_encrypted)
+    # NB: ``config.aoai_api_version`` is deliberately ignored — the v1 API
+    # surface takes no api-version. The column is kept only so existing rows
+    # need no migration.
     provider = AzureOpenAIProvider(
         endpoint=config.aoai_endpoint,
         api_key=key,
         deployment=config.aoai_deployment or DEFAULT_MODEL,
-        api_version=config.aoai_api_version or DEFAULT_API_VERSION,
     )
     return ConversationAnalyser(
         provider, analysis_mode=config.analysis_mode or "combined"

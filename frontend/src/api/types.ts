@@ -11,7 +11,6 @@ export interface AppConfig {
   // Azure OpenAI (analysis engine)
   aoai_endpoint: string | null;
   aoai_deployment: string | null;
-  aoai_api_version: string | null;
   has_aoai_key: boolean;
   analysis_mode: "combined" | "split";
   aoai_configured: boolean;

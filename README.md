@@ -75,8 +75,8 @@ through creating an Entra **app registration** with the two application permissi
 (`AiEnterpriseInteraction.Read.All`, `Directory.Read.All`, admin-consented) and a client secret —
 or reuse the Usage Reporter's app registration, which already has them. Paste **Tenant ID**,
 **Client ID**, **Client secret**, then **Test connection**. Under **Azure OpenAI**, paste your
-**endpoint**, **deployment** (default `gpt-5.4-mini`), **api-version** and **key**, then
-**Test Azure OpenAI**.
+**endpoint** (just `https://<resource>.openai.azure.com` — the `/openai/v1` path is added for
+you), **deployment** (default `gpt-5.4-mini`) and **key**, then **Test Azure OpenAI**.
 
 **4. Load and analyse data.** Select **Run now** for the last 24 hours, or open **Settings →
 Historical backfill** to pull history (default 30 days). Ingest automatically runs the analysis
@@ -297,7 +297,7 @@ On first start an admin login is seeded from `ADMIN_USERNAME` / `ADMIN_PASSWORD`
 2. Sign in with `ADMIN_USERNAME` / `ADMIN_PASSWORD` (seeded automatically on first start).
 3. **Settings** → follow the guided wizard to create the app registration, then enter Tenant ID,
    Client ID and Client secret, and **Test connection**.
-4. Under **Azure OpenAI**, enter endpoint, deployment, api-version and key, then **Test Azure OpenAI**.
+4. Under **Azure OpenAI**, enter endpoint, deployment and key, then **Test Azure OpenAI**.
 5. **Run now** (pulls and analyses recent prompts) or start a **Historical backfill** from Settings
    for history.
 6. Explore the dashboard.

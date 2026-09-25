@@ -52,6 +52,8 @@ class AppConfigIn(BaseModel):
     # --- Azure OpenAI (analysis engine) ---
     aoai_endpoint: str | None = None
     aoai_deployment: str | None = None
+    # Accepted but ignored: the Azure OpenAI v1 surface takes no api-version.
+    # Kept so an older client PUTting it gets a 200 rather than a 422.
     aoai_api_version: str | None = None
     # Write-only: only applied when a non-empty value is supplied.
     aoai_key: str | None = None
@@ -71,7 +73,6 @@ class AppConfigOut(BaseModel):
     # --- Azure OpenAI (analysis engine) ---
     aoai_endpoint: str | None = None
     aoai_deployment: str | None = None
-    aoai_api_version: str | None = None
     has_aoai_key: bool = False
     analysis_mode: str = "combined"
     aoai_configured: bool = False

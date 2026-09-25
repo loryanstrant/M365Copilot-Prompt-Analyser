@@ -194,7 +194,9 @@ class AppConfig(Base):
     backfill_days: Mapped[int] = mapped_column(Integer, default=30)
     schedule_cron: Mapped[str | None] = mapped_column(Text)
     # --- Azure OpenAI (analysis engine) ---
-    # Endpoint + deployment + api-version are plain config; the key is encrypted.
+    # Endpoint + deployment are plain config; the key is encrypted.
+    # ``aoai_api_version`` is retained but unused — the v1 API surface takes no
+    # api-version, and keeping the column avoids a migration for existing rows.
     aoai_endpoint: Mapped[str | None] = mapped_column(Text)
     aoai_deployment: Mapped[str | None] = mapped_column(Text, default="gpt-5.4-mini")
     aoai_api_version: Mapped[str | None] = mapped_column(

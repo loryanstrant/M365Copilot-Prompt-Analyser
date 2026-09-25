@@ -12,8 +12,13 @@ Design notes
   accuracy, ``gpt-5.4-nano`` for lowest cost) in Settings without a code change.
 * **Structured Outputs.** Responses are constrained with a JSON schema
   (``response_format`` = ``json_schema``) so parsing never depends on the model
-  "remembering" to avoid markdown. If the configured model/api-version does not
-  support ``json_schema``, we fall back to ``json_object`` + tolerant parsing.
+  "remembering" to avoid markdown. If the configured model does not support
+  ``json_schema``, we fall back to ``json_object`` + tolerant parsing.
+* **Azure OpenAI v1 surface.** We talk to the ``/openai/v1`` endpoint with the
+  plain ``AsyncOpenAI`` client — no ``api-version`` query parameter and no
+  deployment name in the URL path (the deployment goes in the request body as
+  ``model``). See the API version lifecycle doc:
+  https://learn.microsoft.com/en-us/azure/ai-services/openai/api-version-lifecycle
 * **Pluggable + two modes.** ``analysis_mode="combined"`` (default) does one
   call per conversation returning everything. ``analysis_mode="split"`` runs the
   analyser once per conversation and the sensitivity prompt once per prompt,
@@ -23,14 +28,15 @@ Design notes
   an OpenAI-compatible or Azure AI Language PII provider could slot in later).
 
 The credentials and model come from the ``app_config`` row (endpoint +
-deployment + api-version + Fernet-encrypted key), entered in the admin UI — they
-are never baked into the image.
+deployment + Fernet-encrypted key), entered in the admin UI — they are never
+baked into the image.
 """
 from __future__ import annotations
 
 import json
 import logging
 from typing import Any, Protocol
+from urllib.parse import urlsplit, urlunsplit
 
 from shared.analysis_prompts import (
     ANALYSER_ONLY_SYSTEM_PROMPT,
@@ -45,11 +51,42 @@ from shared.analysis_prompts import (
 logger = logging.getLogger("shared.llm")
 
 DEFAULT_MODEL = "gpt-5.4-mini"
-DEFAULT_API_VERSION = "2025-01-01-preview"
+
+#: Path suffix of the Azure OpenAI v1 API surface.
+V1_PATH = "/openai/v1"
 
 
 class LLMError(RuntimeError):
     """Raised when the analysis model cannot be reached or returns garbage."""
+
+
+def normalise_endpoint(endpoint: str) -> str:
+    """Return the v1 ``base_url`` for a user-entered Azure OpenAI endpoint.
+
+    People paste whatever the portal showed them, so accept all of these and
+    return ``https://<resource>.openai.azure.com/openai/v1/``:
+
+    * ``https://my-resource.openai.azure.com``
+    * ``https://my-resource.openai.azure.com/``
+    * ``https://my-resource.openai.azure.com/openai``
+    * ``https://my-resource.openai.azure.com/openai/v1/``
+    * ``https://my-resource.openai.azure.com/openai/deployments/my-model/chat/completions``
+    * ...including a stale ``?api-version=...`` query, which is dropped.
+    """
+    raw = (endpoint or "").strip()
+    if not raw:
+        raise LLMError("Azure OpenAI endpoint is required.")
+    if "://" not in raw:
+        raw = f"https://{raw}"
+    parts = urlsplit(raw)
+    # Everything from "/openai" onwards is the old API path — drop it and
+    # rebuild, so a pasted full request URL normalises like a bare endpoint.
+    path = parts.path.rstrip("/")
+    marker = path.find("/openai")
+    if marker != -1:
+        path = path[:marker]
+    # Any query/fragment (e.g. a pasted ?api-version=...) goes too.
+    return urlunsplit((parts.scheme, parts.netloc, f"{path}{V1_PATH}/", "", ""))
 
 
 # --------------------------------------------------------------------------
@@ -173,7 +210,12 @@ class AnalysisProvider(Protocol):
 
 
 class AzureOpenAIProvider:
-    """Concrete provider backed by the ``openai`` SDK's ``AsyncAzureOpenAI``."""
+    """Concrete provider backed by the ``openai`` SDK's ``AsyncOpenAI`` client.
+
+    Pointed at the Azure OpenAI **v1** surface (``.../openai/v1/``), which takes
+    no ``api-version`` query parameter and carries the deployment name in the
+    request body rather than the URL path.
+    """
 
     def __init__(
         self,
@@ -181,13 +223,12 @@ class AzureOpenAIProvider:
         endpoint: str,
         api_key: str,
         deployment: str,
-        api_version: str = DEFAULT_API_VERSION,
     ) -> None:
         if not (endpoint and api_key and deployment):
             raise LLMError("Azure OpenAI endpoint, key and deployment are required.")
         # Imported lazily so the package is only needed where analysis runs.
         try:
-            from openai import AsyncAzureOpenAI
+            from openai import AsyncOpenAI
         except ImportError as exc:  # pragma: no cover
             raise LLMError(
                 "The 'openai' package is required for analysis. Install it "
@@ -195,10 +236,10 @@ class AzureOpenAIProvider:
             ) from exc
 
         self._deployment = deployment
-        self._client = AsyncAzureOpenAI(
-            azure_endpoint=endpoint,
+        self._base_url = normalise_endpoint(endpoint)
+        self._client = AsyncOpenAI(
+            base_url=self._base_url,
             api_key=api_key,
-            api_version=api_version,
         )
 
     async def complete_json(
@@ -214,7 +255,7 @@ class AzureOpenAIProvider:
             {"role": "user", "content": user},
         ]
         # Prefer strict Structured Outputs; fall back to json_object if the
-        # model/api-version rejects json_schema.
+        # model rejects json_schema.
         try:
             resp = await self._client.chat.completions.create(
                 model=self._deployment,
