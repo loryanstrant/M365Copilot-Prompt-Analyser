@@ -15,7 +15,7 @@ sensitive info / profanity) and a quality-score range.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import date
+from datetime import date, timedelta
 from typing import Any
 
 from sqlalchemy import Integer, and_, cast, distinct, func, or_, select
@@ -26,6 +26,8 @@ from shared.models import ConversationAnalysis, EntraUser, Prompt, PromptAnalysi
 
 GCSE_LEVERS = ("goal", "context", "source", "expectation")
 _HIGH_QUALITY = 7
+# Below this is the red band the dashboards already use (>=7 / 4-6 / <4).
+_LOW_QUALITY = 4
 _WELL_GROUNDED = 7
 # A confidence >= this counts as "contains a name / sensitive info / profanity".
 FLAG_THRESHOLD = 7
@@ -773,6 +775,197 @@ async def conversation_detail(session: AsyncSession, conversation_id: str) -> di
             else {"avg_of_prompts": avg_of_prompts, "user_name": owner}
         ),
         "prompts": prompts,
+    }
+
+
+# --- executive briefing --------------------------------------------------
+async def daily(session: AsyncSession, *, f: PromptFilter) -> list[dict[str, Any]]:
+    """Prompts and conversations per day, oldest first.
+
+    The first time-bucketed query in this app: everything else here aggregates
+    over the whole filtered set. ``prompts.prompt_date`` is already indexed, and
+    it is a DATE rather than a timestamp, so the grouping needs no truncation and
+    no timezone argument — the day is whatever Graph called the day.
+    """
+    b = _base(f)
+    rows = (
+        await session.execute(
+            select(
+                b.c.prompt_date,
+                func.count().label("prompts"),
+                func.count(distinct(b.c.conversation_id)).label("conversations"),
+            )
+            .where(b.c.prompt_date.is_not(None))
+            .group_by(b.c.prompt_date)
+            .order_by(b.c.prompt_date)
+        )
+    ).all()
+    return [
+        {"date": d.isoformat(), "prompts": int(p), "conversations": int(c)}
+        for d, p, c in rows
+    ]
+
+
+async def briefing(
+    session: AsyncSession, *, today: date | None = None, window_days: int = 30
+) -> dict[str, Any]:
+    """An executive snapshot: this period against the one before it.
+
+    Deliberately deterministic — pure SQL here, and prose assembled in the
+    browser from fixed thresholds. This app has Azure OpenAI configured and
+    still does not use it for the briefing: a narrated summary read out in front
+    of a customer must never contain a number the app invented.
+
+    Everything is a plain window over ``prompt_date`` rather than the shared
+    filter set, because a briefing that silently inherited somebody's saved
+    slicers would be quoting a subset while claiming to describe the
+    organisation.
+    """
+    today = today or date.today()
+    cur_start = today - timedelta(days=window_days)
+    prev_start = today - timedelta(days=2 * window_days)
+
+    async def _period(lo: date, hi: date | None) -> dict[str, Any]:
+        conds: list[Any] = [Prompt.prompt_date >= lo]
+        if hi is not None:
+            conds.append(Prompt.prompt_date < hi)
+        joined = (
+            select(
+                Prompt.prompt_id,
+                Prompt.user_id,
+                Prompt.conversation_id,
+                PromptAnalysis.quality_score,
+                PromptAnalysis.user_generated,
+            )
+            .join(PromptAnalysis, PromptAnalysis.prompt_id == Prompt.prompt_id)
+            .where(*conds)
+            .subquery()
+        )
+        prompts = await session.scalar(select(func.count()).select_from(joined)) or 0
+        conversations = (
+            await session.scalar(
+                select(func.count(distinct(joined.c.conversation_id)))
+            )
+            or 0
+        )
+        people = (
+            await session.scalar(select(func.count(distinct(joined.c.user_id)))) or 0
+        )
+        avg_quality = await session.scalar(select(func.avg(joined.c.quality_score)))
+        user_gen = (
+            await session.scalar(
+                select(func.count())
+                .select_from(joined)
+                .where(joined.c.user_generated.is_(True))
+            )
+            or 0
+        )
+        return {
+            "prompts": int(prompts),
+            "conversations": int(conversations),
+            "people": int(people),
+            "avg_quality": _round(avg_quality),
+            "user_generated_pct": (
+                round(100.0 * int(user_gen) / int(prompts), 1) if prompts else 0.0
+            ),
+        }
+
+    current = await _period(cur_start, None)
+    previous = await _period(prev_start, cur_start)
+
+    cur = PromptFilter(date_from=cur_start)
+    prev = PromptFilter(date_from=prev_start, date_to=cur_start - timedelta(days=1))
+
+    async def _intents(f: PromptFilter) -> dict[str, tuple[int, float | None]]:
+        b = _base(f)
+        rows = (
+            await session.execute(
+                select(b.c.category, func.count(), func.avg(b.c.quality_score))
+                .group_by(b.c.category)
+            )
+        ).all()
+        return {(c or "Unknown"): (int(n), _round(q)) for c, n, q in rows}
+
+    cur_intents = await _intents(cur)
+    prev_intents = await _intents(prev)
+    top_intents = [
+        {
+            "name": name,
+            "prompts": count,
+            "prev_prompts": prev_intents.get(name, (0, None))[0],
+            "avg_quality": quality,
+        }
+        for name, (count, quality) in sorted(
+            cur_intents.items(), key=lambda kv: kv[1][0], reverse=True
+        )[:5]
+    ]
+
+    # Conversation themes, not prompt categories again. The category on a prompt
+    # is what somebody asked Copilot to do; the theme on a conversation is what
+    # the work was about, which is the one an executive recognises.
+    cur_conv_ids = select(distinct(_base(cur).c.conversation_id)).scalar_subquery()
+    theme_rows = (
+        await session.execute(
+            select(ConversationAnalysis.theme, func.count())
+            .where(
+                ConversationAnalysis.conversation_id.in_(cur_conv_ids),
+                ConversationAnalysis.theme.is_not(None),
+            )
+            .group_by(ConversationAnalysis.theme)
+            .order_by(func.count().desc())
+            .limit(5)
+        )
+    ).all()
+    top_themes = [{"name": t, "conversations": int(n)} for t, n in theme_rows]
+
+    # Coaching watch-outs. The weakest lever across the organisation says where
+    # enablement would pay; the count of people below the low-quality threshold
+    # says how many would feel it.
+    b_cur = _base(cur)
+    levers = []
+    for lever in GCSE_LEVERS:
+        avg = await session.scalar(select(func.avg(getattr(b_cur.c, f"gcse_{lever}"))))
+        if avg is not None:
+            levers.append({"lever": lever, "score": _round(avg)})
+    levers.sort(key=lambda r: r["score"])
+
+    low_quality = (
+        await session.scalar(
+            select(func.count())
+            .select_from(b_cur)
+            .where(b_cur.c.quality_score < _LOW_QUALITY)
+        )
+        or 0
+    )
+    per_user = (
+        select(b_cur.c.user_id, func.avg(b_cur.c.quality_score).label("avg_q"))
+        .group_by(b_cur.c.user_id)
+        .subquery()
+    )
+    people_needing_coaching = (
+        await session.scalar(
+            select(func.count())
+            .select_from(per_user)
+            .where(per_user.c.avg_q < _LOW_QUALITY)
+        )
+        or 0
+    )
+
+    total_prompts = await session.scalar(select(func.count()).select_from(Prompt)) or 0
+
+    return {
+        "window_days": window_days,
+        "period_start": cur_start.isoformat(),
+        "period_end": today.isoformat(),
+        "previous_period_start": prev_start.isoformat(),
+        "current": current,
+        "previous": previous,
+        "total_prompts": int(total_prompts),
+        "top_intents": top_intents,
+        "top_themes": top_themes,
+        "levers": levers,
+        "low_quality_prompts": int(low_quality),
+        "people_needing_coaching": int(people_needing_coaching),
     }
 
 

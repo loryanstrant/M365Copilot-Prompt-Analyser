@@ -5,6 +5,7 @@ import { FiltersProvider } from "./filters/FiltersContext";
 import { useSetupStatus } from "./hooks/useSetupStatus";
 import AboutPage from "./pages/AboutPage";
 import BackfillPage from "./pages/BackfillPage";
+import BriefingPage from "./pages/BriefingPage";
 import CoachingPage from "./pages/CoachingPage";
 import ConversationsPage from "./pages/ConversationsPage";
 import OverviewPage from "./pages/OverviewPage";
@@ -62,6 +63,7 @@ export default function App() {
           <Route path="/overview" element={org(<OverviewPage />)} />
           {/* The overview used to live at /summary; keep old links working. */}
           <Route path="/summary" element={<Navigate to="/overview" replace />} />
+          <Route path="/briefing" element={org(<BriefingPage />)} />
           <Route path="/usage" element={org(<UsageBreakdownPage />)} />
           <Route path="/quality" element={org(<PromptQualityPage />)} />
           <Route path="/conversations" element={org(<ConversationsPage />)} />

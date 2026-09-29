@@ -111,6 +111,29 @@ async def get_directory_users(
     return await metrics.directory_users(session)
 
 
+@router.get("/daily")
+async def get_daily(
+    f: PromptFilter = Depends(get_filters),
+    session: AsyncSession = Depends(get_session),
+):
+    """Prompts and conversations per day, for the briefing's momentum chart."""
+    return await metrics.daily(session, f=f)
+
+
+@router.get("/briefing")
+async def get_briefing(
+    window_days: int = Query(default=30, ge=7, le=90),
+    session: AsyncSession = Depends(get_session),
+):
+    """The executive briefing: this period against the one before it.
+
+    Takes a window rather than the shared slicers on purpose — a briefing that
+    inherited somebody's saved filters would describe a subset while claiming to
+    describe the organisation.
+    """
+    return await metrics.briefing(session, window_days=window_days)
+
+
 @router.get("/summary")
 async def get_summary(
     f: PromptFilter = Depends(get_filters),

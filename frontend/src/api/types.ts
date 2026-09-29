@@ -293,6 +293,55 @@ export interface ConversationDetail {
   prompts: ConversationPrompt[];
 }
 
+/** One day of activity (GET /metrics/daily). */
+export interface DailyPoint {
+  date: string;
+  prompts: number;
+  conversations: number;
+}
+
+export interface BriefingPeriod {
+  prompts: number;
+  conversations: number;
+  people: number;
+  avg_quality: number | null;
+  user_generated_pct: number;
+}
+
+export interface BriefingIntent {
+  name: string;
+  prompts: number;
+  prev_prompts: number;
+  avg_quality: number | null;
+}
+
+export interface BriefingTheme {
+  name: string;
+  conversations: number;
+}
+
+export interface BriefingLever {
+  lever: string;
+  score: number;
+}
+
+/** The executive briefing (GET /metrics/briefing). Every figure is SQL; the
+ *  prose around them is assembled in the browser from fixed thresholds. */
+export interface Briefing {
+  window_days: number;
+  period_start: string;
+  period_end: string;
+  previous_period_start: string;
+  current: BriefingPeriod;
+  previous: BriefingPeriod;
+  total_prompts: number;
+  top_intents: BriefingIntent[];
+  top_themes: BriefingTheme[];
+  levers: BriefingLever[];
+  low_quality_prompts: number;
+  people_needing_coaching: number;
+}
+
 /** One row of the tenant users listing (GET /metrics/users). */
 export interface DirectoryUser {
   user_id: string;
