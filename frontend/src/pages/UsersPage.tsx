@@ -44,6 +44,11 @@ export default function UsersPage() {
     [users],
   );
 
+  // Company is deliberately not a column. At 1600px the ten columns overflowed
+  // by 90px, which pushed Prompts — the thing this page exists to show — off
+  // the right-hand edge behind a horizontal scrollbar. Company is the same
+  // value on every row in a single-tenant directory, so it was the one to cut;
+  // the API still returns it.
   const columns: Column<DirectoryUser>[] = [
     {
       key: "display_name",
@@ -57,11 +62,6 @@ export default function UsersPage() {
     },
     { key: "job_title", header: "Job title", accessor: (u) => u.job_title },
     { key: "department", header: "Department", accessor: (u) => u.department },
-    {
-      key: "company_name",
-      header: "Company",
-      accessor: (u) => u.company_name,
-    },
     {
       key: "office_location",
       header: "Office",
@@ -134,6 +134,10 @@ export default function UsersPage() {
           getRowKey={(u) => u.user_id}
           initialSort={{ key: "display_name", dir: "asc" }}
           filterable
+          // A directory is long enough that the filter boxes would scroll off
+          // the top, which is the difference between the filter row working and
+          // being a decoration.
+          maxBodyHeight={520}
           emptyMessage="No users imported yet. Configure the app registration in Settings, then run a collection."
         />
       </ChartCard>

@@ -354,10 +354,11 @@ export default function SettingsPage() {
             <div className="border-t border-slate-200 pt-5 dark:border-slate-700">
               <h2 className="text-lg font-semibold">Sign in with Microsoft (optional)</h2>
               <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
-                Lets colleagues sign in with their work account as read-only viewers. It
-                reuses the app registration above, so there is nothing extra to create —
-                you only need to register the redirect URI below. Administration stays
-                behind the admin password.
+                Lets colleagues sign in with their work account. It reuses the app
+                registration above, so there is nothing extra to create — you only need
+                to register the redirect URI below. Everyone signs in as a viewer unless
+                they are in the admin group set below; the local admin password keeps
+                working either way, as the break-glass account.
               </p>
             </div>
 

@@ -15,8 +15,9 @@ issuer, audience and signature) inside ``acquire_token_by_auth_code_flow`` — w
 deliberately do not hand-roll any of it.
 
 Optionally checks membership of a configured Entra security group (via app-only
-Graph ``checkMemberGroups``). SSO users are viewers; administration stays behind
-the password gate.
+Graph ``checkMemberGroups``). SSO users are minted as viewers; whether they
+administer is decided per request from the admin group (see
+:func:`api.auth.is_admin`), never from the token.
 """
 from __future__ import annotations
 
