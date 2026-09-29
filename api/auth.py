@@ -162,6 +162,12 @@ async def personal_view_user_id(
     """
     if user.oid:
         return user.oid
+    # Only the local administrator stands in for the persona. Any other local
+    # account is left exactly as it was, because the binding exists so whoever
+    # loaded the demo data can look at the pages it unlocks — not so that every
+    # password account in the deployment inherits a fictional person.
+    if user.role != "admin":
+        return None
     cfg = await session.get(AppConfig, 1)
     return (cfg.demo_persona_user_id if cfg else None) or None
 

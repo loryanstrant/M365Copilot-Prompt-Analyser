@@ -288,6 +288,26 @@ export default function BriefingPage() {
     );
   }
 
+  // History exists but this window is empty — a gap in collection, or genuinely
+  // quiet weeks. Saying so is better than a briefing full of zeroes describing
+  // a period nothing happened in.
+  if (loaded && b && b.current.prompts === 0) {
+    return (
+      <div className="space-y-6">
+        <Header
+          period={`${b.window_days} days to ${fmtDate(b.period_end)}`}
+          generatedAt={generatedAt}
+        />
+        <div className="rounded-lg bg-amber-50 px-4 py-3 text-sm text-amber-800 dark:bg-amber-900/20 dark:text-amber-300">
+          No prompts were analysed in the last {b.window_days} days, so there is
+          nothing to compare this period against the one before it.{" "}
+          {b.total_prompts.toLocaleString()} prompts are stored from earlier
+          periods — check Settings for when the last collection ran.
+        </div>
+      </div>
+    );
+  }
+
   if (!b) {
     return (
       <div className="space-y-6">

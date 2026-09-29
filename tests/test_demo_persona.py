@@ -189,3 +189,18 @@ async def test_a_successful_ingest_retires_the_binding():
 
     async with SessionLocal() as s:
         assert (await s.get(Config, 1)).demo_persona_user_id is None
+
+
+@pytest.mark.asyncio
+async def test_a_local_viewer_account_does_not_inherit_the_persona(client):
+    """The binding is for whoever loaded the demo data, not for every password
+    account in the deployment."""
+    from api.auth import create_access_token
+
+    await _seed(bind=True)
+    token = create_access_token("reader", "viewer")
+    headers = {"Authorization": f"Bearer {token}"}
+
+    me = (await client.get("/auth/me", headers=headers)).json()
+    assert me["has_personal_view"] is False
+    assert (await client.get("/metrics/me/coaching", headers=headers)).status_code == 404
