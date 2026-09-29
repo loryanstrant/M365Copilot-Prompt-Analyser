@@ -134,6 +134,13 @@ async def sync_licensed_users(
     """Refresh the ``licensed_users`` snapshot from Graph."""
     if granting_skus is None:
         granting_skus = await resolve_granting_skus(graph, config)
+    if not granting_skus:
+        # No Copilot-bearing subscription in this tenant. Clearing the snapshot
+        # is the honest answer: leaving yesterday's rows would report licences
+        # that no longer exist, and asking Graph for "users holding nothing"
+        # would ask for the whole directory.
+        await session.execute(delete(LicensedUser))
+        return 0
     rows: list[dict[str, Any]] = []
     async for user in graph.iter_licensed_users(sorted(granting_skus)):
         # The Graph filter matches the SKU; it cannot express "and the Copilot
@@ -331,6 +338,18 @@ async def run_ingest(
             stats["entra_users"] = await sync_entra_users(
                 session, graph, config, granting
             )
+            # A real ingest has happened, so the demo persona binding has to go:
+            # otherwise an operator who forgets to clear demo data keeps seeing a
+            # fictional person's prompts as their own personal page, against
+            # live tenant data. Only the binding is dropped — clearing the seeded
+            # rows themselves stays an explicit action.
+            if config.demo_persona_user_id:
+                logger.info("Retiring the demo persona after a successful ingest.")
+                cfg = await session.get(AppConfig, 1)
+                if cfg is not None:
+                    cfg.demo_persona_user_id = None
+                stats["demo_persona_retired"] = True
+
             job.status = "success"
             job.finished_at = datetime.now(timezone.utc)
             job.stats = stats

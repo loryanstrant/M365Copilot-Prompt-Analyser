@@ -170,7 +170,15 @@ class GraphClient:
     async def iter_licensed_users(
         self, sku_ids: list[str]
     ) -> AsyncIterator[dict[str, Any]]:
-        """Yield users holding any of the configured Copilot SKUs."""
+        """Yield users holding any of the configured Copilot SKUs.
+
+        An empty list yields nothing at all. Building the filter from no SKUs
+        gives ``$filter=``, which Graph either rejects or honours as "no filter"
+        and answers with the entire directory — so a tenant that owns nothing
+        Copilot-bearing would pull every user it has on every ingest.
+        """
+        if not sku_ids:
+            return
         clause = " or ".join(
             f"assignedLicenses/any(u:u/skuId eq {sku})" for sku in sku_ids
         )

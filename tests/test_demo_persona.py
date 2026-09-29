@@ -134,3 +134,58 @@ async def test_the_binding_cannot_be_overridden_by_the_request(client):
         )
     ).json()
     assert body["prompts"] == 2
+
+
+@pytest.mark.asyncio
+async def test_a_successful_ingest_retires_the_binding():
+    """Real data has arrived, so the stand-in must go.
+
+    An operator who forgets to press "Clear demo data" would otherwise keep
+    seeing a fictional person's prompts as their own personal page, sitting
+    alongside live tenant data.
+    """
+    from datetime import datetime, timezone
+
+    from shared.db import SessionLocal as factory
+    from shared.models import AppConfig as Config
+    from worker.ingest import run_ingest
+
+    await _seed(bind=True)
+
+    class FakeGraph:
+        async def iter_licensed_users(self, sku_ids):
+            if False:  # pragma: no cover - an empty async generator
+                yield {}
+
+        async def get_subscribed_skus(self):
+            return []
+
+        async def iter_directory_users(self):
+            if False:  # pragma: no cover
+                yield {}
+
+        async def iter_enterprise_interactions(
+            self, user_id, since, until, *, page_size=100
+        ):
+            if False:  # pragma: no cover
+                yield {}
+
+        async def aclose(self):
+            pass
+
+    async with SessionLocal() as s:
+        cfg = await s.get(Config, 1)
+        cfg.tenant_id = "tenant"
+        await s.commit()
+        config = await s.get(Config, 1)
+
+    await run_ingest(
+        factory,
+        graph=FakeGraph(),
+        config=config,
+        job_name="test",
+        now=datetime(2026, 9, 29, tzinfo=timezone.utc),
+    )
+
+    async with SessionLocal() as s:
+        assert (await s.get(Config, 1)).demo_persona_user_id is None
