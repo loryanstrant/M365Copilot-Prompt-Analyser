@@ -293,6 +293,22 @@ export interface ConversationDetail {
   prompts: ConversationPrompt[];
 }
 
+/** One row of the tenant users listing (GET /metrics/users). */
+export interface DirectoryUser {
+  user_id: string;
+  user_principal_name: string | null;
+  display_name: string | null;
+  job_title: string | null;
+  department: string | null;
+  company_name: string | null;
+  office_location: string | null;
+  country: string | null;
+  manager_name: string | null;
+  user_type: string | null;
+  has_copilot_license: boolean;
+  prompts: number;
+}
+
 export interface PersonalCoaching {
   user_id: string;
   name: string;

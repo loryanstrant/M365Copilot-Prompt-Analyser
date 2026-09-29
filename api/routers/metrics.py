@@ -31,6 +31,7 @@ from api.auth import (
     require_org_view,
 )
 from api.metrics import PromptFilter
+from api.schemas import DirectoryUserOut
 from shared.db import get_session
 from shared.models import Prompt
 
@@ -92,6 +93,22 @@ async def get_people(session: AsyncSession = Depends(get_session)):
     sits behind the org gate — not something a rank-and-file viewer should see.
     """
     return await metrics.people(session)
+
+
+@router.get("/users", response_model=list[DirectoryUserOut])
+async def get_directory_users(
+    session: AsyncSession = Depends(get_session),
+) -> list[dict]:
+    """The imported tenant directory, for sorting and filtering in the UI.
+
+    Org-gated like the person picker, and for the same reason: it is a list of
+    named colleagues with their usage against their names, not something every
+    signed-in viewer should be handed.
+
+    Unpaginated on purpose: the page filters client-side so typing is instant,
+    and a tenant directory is tens of thousands of rows at the very most.
+    """
+    return await metrics.directory_users(session)
 
 
 @router.get("/summary")

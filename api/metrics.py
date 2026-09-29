@@ -269,6 +269,55 @@ async def people(session: AsyncSession) -> list[dict[str, Any]]:
     ]
 
 
+async def directory_users(session: AsyncSession) -> list[dict[str, Any]]:
+    """The imported tenant directory, with each person's prompt count.
+
+    Distinct from :func:`people`, which lists only those who have prompt data
+    because it drives the person picker. This one starts from the directory, so
+    somebody with a licence and no activity still appears — that is the row this
+    list actually gets opened to find, and dropping it would answer the opposite
+    of the question.
+
+    Ordered by name so the page opens on something readable. Manager is resolved
+    to a name: manager_id is a GUID, and a directory listing showing GUIDs is no
+    use to anyone reading it.
+    """
+    prompts = (
+        select(Prompt.user_id, func.count().label("prompts"))
+        .group_by(Prompt.user_id)
+        .subquery()
+    )
+    rows = (
+        await session.execute(
+            select(
+                EntraUser,
+                func.coalesce(prompts.c.prompts, 0).label("prompts"),
+                _Mgr.display_name.label("manager_name"),
+            )
+            .outerjoin(prompts, prompts.c.user_id == EntraUser.user_id)
+            .outerjoin(_Mgr, _Mgr.user_id == EntraUser.manager_id)
+            .order_by(EntraUser.display_name)
+        )
+    ).all()
+    return [
+        {
+            "user_id": u.user_id,
+            "user_principal_name": u.upn,
+            "display_name": u.display_name,
+            "job_title": u.job_title,
+            "department": u.department,
+            "company_name": u.company_name,
+            "office_location": u.office_location,
+            "country": u.country,
+            "manager_name": manager_name,
+            "user_type": u.user_type,
+            "has_copilot_license": bool(u.has_copilot_license),
+            "prompts": int(prompt_count or 0),
+        }
+        for u, prompt_count, manager_name in rows
+    ]
+
+
 # --- headline summary ----------------------------------------------------
 async def summary(session: AsyncSession, *, f: PromptFilter) -> dict[str, Any]:
     b = _base(f)

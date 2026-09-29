@@ -85,6 +85,9 @@ export default function Layout({ children }: { children: ReactNode }) {
               <NavLink to="/coaching" className={navClass}>
                 People coaching
               </NavLink>
+              <NavLink to="/users" className={navClass}>
+                Tenant users
+              </NavLink>
             </>
           )}
 
@@ -94,10 +97,18 @@ export default function Layout({ children }: { children: ReactNode }) {
               <NavLink to="/settings" className={navClass}>
                 Settings
               </NavLink>
+              {/* Both of these were routed and linked from nowhere, so two
+                  working pages could only be reached by typing the URL. */}
+              <NavLink to="/backfill" className={navClass}>
+                Historical backfill
+              </NavLink>
             </>
           )}
 
           <NavSectionLabel>Help</NavSectionLabel>
+          <NavLink to="/help" className={navClass}>
+            Setup guide
+          </NavLink>
           <NavLink to="/about" className={navClass}>
             About
           </NavLink>

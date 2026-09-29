@@ -14,6 +14,7 @@ import PromptQualityPage from "./pages/PromptQualityPage";
 import SettingsPage from "./pages/SettingsPage";
 import SetupGuidePage from "./pages/SetupGuidePage";
 import UsageBreakdownPage from "./pages/UsageBreakdownPage";
+import UsersPage from "./pages/UsersPage";
 
 export default function App() {
   const { user, loading } = useAuth();
@@ -65,6 +66,7 @@ export default function App() {
           <Route path="/quality" element={org(<PromptQualityPage />)} />
           <Route path="/conversations" element={org(<ConversationsPage />)} />
           <Route path="/coaching" element={org(<CoachingPage />)} />
+          <Route path="/users" element={org(<UsersPage />)} />
           <Route path="/help" element={<SetupGuidePage />} />
           <Route path="/about" element={<AboutPage />} />
           <Route
