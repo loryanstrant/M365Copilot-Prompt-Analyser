@@ -6,6 +6,8 @@ export interface AppConfig {
   copilot_sku_ids: string[];
   report_access_group_id: string | null;
   org_view_group_id: string | null;
+  /** Members get admin on Entra sign-in. Null = nobody does (fails closed). */
+  admin_group_id: string | null;
   schedule_interval_hours: number;
   configured: boolean;
   // Azure OpenAI (analysis engine)

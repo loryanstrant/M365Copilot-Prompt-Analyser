@@ -191,6 +191,10 @@ class AppConfig(Base):
     # and repurposing it would hand a personal view to people a tenant had
     # deliberately excluded.
     org_view_group_id: Mapped[str | None] = mapped_column(Text)
+    # Membership of this group grants administrator rights, so admin does not
+    # have to be a shared username and password. Blank grants admin to nobody:
+    # unlike the org view, administration fails closed.
+    admin_group_id: Mapped[str | None] = mapped_column(Text)
     backfill_days: Mapped[int] = mapped_column(Integer, default=30)
     schedule_cron: Mapped[str | None] = mapped_column(Text)
     # --- Azure OpenAI (analysis engine) ---

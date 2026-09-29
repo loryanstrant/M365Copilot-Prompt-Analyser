@@ -10,6 +10,9 @@ import { api, getToken, setToken } from "../api/client";
 export interface User {
   username: string;
   role: string;
+  // Entra display name. Null for the password admin, and for tokens issued
+  // before display names were carried, so always fall back to the username.
+  display_name: string | null;
   // Whether this person may see organisation-wide data. Evaluated per request
   // by the API from the configured Entra group, not baked into the token.
   can_view_org: boolean;

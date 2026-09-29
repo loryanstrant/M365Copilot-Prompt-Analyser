@@ -55,6 +55,7 @@ export default function SettingsPage() {
   const [scheduleHours, setScheduleHours] = useState(24);
   const [groupId, setGroupId] = useState("");
   const [orgViewGroupId, setOrgViewGroupId] = useState("");
+  const [adminGroupId, setAdminGroupId] = useState("");
   const [redirectUri, setRedirectUri] = useState("");
 
   // Azure OpenAI
@@ -73,6 +74,7 @@ export default function SettingsPage() {
     setScheduleHours(cfg.schedule_interval_hours ?? 24);
     setGroupId(cfg.report_access_group_id ?? "");
     setOrgViewGroupId(cfg.org_view_group_id ?? "");
+    setAdminGroupId(cfg.admin_group_id ?? "");
     setAoaiEndpoint(cfg.aoai_endpoint ?? "");
     setAoaiDeployment(cfg.aoai_deployment ?? "");
     setHasAoaiKey(cfg.has_aoai_key);
@@ -122,6 +124,7 @@ export default function SettingsPage() {
         schedule_interval_hours: scheduleHours,
         report_access_group_id: groupId,
         org_view_group_id: orgViewGroupId,
+        admin_group_id: adminGroupId,
         aoai_endpoint: aoaiEndpoint,
         aoai_deployment: aoaiDeployment,
         analysis_mode: analysisMode,
@@ -369,6 +372,17 @@ export default function SettingsPage() {
               <input
                 value={orgViewGroupId}
                 onChange={(e) => setOrgViewGroupId(e.target.value)}
+                className="input"
+              />
+            </Field>
+
+            <Field
+              label="Admin group ID"
+              hint="Optional Entra security group whose members become administrators when they sign in with Entra ID, so you don't have to share the admin password. Leave blank and only the local admin account can administer."
+            >
+              <input
+                value={adminGroupId}
+                onChange={(e) => setAdminGroupId(e.target.value)}
                 className="input"
               />
             </Field>

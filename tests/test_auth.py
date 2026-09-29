@@ -71,6 +71,8 @@ async def test_admin_config_roundtrip_secret_write_only(session):
         assert me.json() == {
             "username": "admin",
             "role": "admin",
+            # The password admin has no directory identity, so no display name.
+            "display_name": None,
             # Admins always clear the org gate; the password admin has no
             # directory identity, so there is no personal view for them.
             "can_view_org": True,
