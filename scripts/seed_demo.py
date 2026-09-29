@@ -71,6 +71,19 @@ _SAMPLE_PROMPTS = [
     "Draft talking points for a difficult conversation with an underperforming team member.",
 ]
 
+# Prompts Copilot offered rather than the person writing them. The
+# user-generated share is one of the report's headline figures, so demo data in
+# which everybody hand-writes everything makes that figure — and the coaching
+# built on it — look broken.
+_SUGGESTED_PROMPTS = [
+    "What did I miss while I was away?",
+    "Summarise my unread emails from this week.",
+    "Catch me up on this chat.",
+    "What are my next steps after this meeting?",
+    "Show me recent files shared with me.",
+]
+_SUGGESTED_SHARE = 0.18
+
 _THEMES = [
     "Drafting external communications",
     "Analysing financial data",
@@ -151,10 +164,33 @@ def _persona_rows() -> list[dict[str, object]]:
     return rows
 
 
-def _rand_gcse() -> dict[str, int]:
-    base = random.randint(3, 9)
-    return {lever: max(1, min(10, base + random.randint(-2, 2))) for lever in
-            ("goal", "context", "source", "expectation")}
+# How good each person is at prompting, as an offset on the 1-10 scale. Without
+# this, every score is drawn from the same distribution, so with a few hundred
+# prompts everybody averages about 5.5 — the coaching pages have nobody to coach,
+# the briefing has no watch-outs, and the person picker is pointless. A real
+# tenant has strong prompters and struggling ones, so the demo does too.
+_SKILL: dict[str, int] = {
+    "user-00": 2, "user-01": 1, "user-02": 0, "user-03": 3, "user-04": -1,
+    "user-05": 1, "user-06": -3, "user-07": 2, "user-08": -2, "user-09": 0,
+    "user-10": 1, "user-11": -3,
+}
+
+# One lever is the organisation's weakest, so the briefing has something to say
+# about where enablement would pay. People are worse at stating a goal than at
+# anything else, which is also what the coaching copy assumes.
+_LEVER_BIAS = {"goal": -1, "context": 0, "source": 0, "expectation": 1}
+
+
+def _clamp(value: int) -> int:
+    return max(1, min(10, value))
+
+
+def _rand_gcse(skill: int) -> dict[str, int]:
+    base = random.randint(3, 8) + skill
+    return {
+        lever: _clamp(base + _LEVER_BIAS[lever] + random.randint(-1, 1))
+        for lever in ("goal", "context", "source", "expectation")
+    }
 
 
 async def seed(conversations: int, reset: bool) -> dict[str, int]:
@@ -191,22 +227,34 @@ async def seed(conversations: int, reset: bool) -> dict[str, int]:
             cat = random.choice(CATEGORIES)
             day = today - timedelta(days=random.randint(0, 89))
             n = random.randint(1, 6)
+            user_id = f"user-{c % _ACTIVE_PERSONAS:02d}"
+            skill = _SKILL.get(user_id, 0)
             scores: list[int] = []
             user_gen = 0
             for p in range(n):
                 pid = f"{conv_id}-p{p}"
-                text = random.choice(_SAMPLE_PROMPTS)
-                is_user = not (len(text) < 12 or text.isupper())
+                suggested = random.random() < _SUGGESTED_SHARE
+                if suggested:
+                    text = random.choice(_SUGGESTED_PROMPTS)
+                    is_user = False
+                else:
+                    text = random.choice(_SAMPLE_PROMPTS)
+                    is_user = not (len(text) < 12 or text.isupper())
                 user_gen += int(is_user)
-                q = random.randint(1, 10)
+                # A suggested prompt is somebody else's words, so it does not
+                # show what this person can do: those score around the middle
+                # whatever their own skill.
+                q = _clamp(
+                    random.randint(3, 8) + (0 if suggested else skill) + random.randint(-1, 1)
+                )
                 scores.append(q)
-                gcse = _rand_gcse()
+                gcse = _rand_gcse(0 if suggested else skill)
                 name_conf = random.randint(1, 10)
                 sens_conf = random.randint(1, 10)
                 session.add(
                     Prompt(
                         prompt_id=pid,
-                        user_id=f"user-{c % _ACTIVE_PERSONAS:02d}",
+                        user_id=user_id,
                         conversation_id=conv_id,
                         app_name=app,
                         prompt_date=day,
