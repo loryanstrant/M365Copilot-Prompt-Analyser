@@ -6,6 +6,8 @@ export interface AppConfig {
   copilot_sku_ids: string[];
   report_access_group_id: string | null;
   org_view_group_id: string | null;
+  /** Members get admin on Entra sign-in. Null = nobody does (fails closed). */
+  admin_group_id: string | null;
   schedule_interval_hours: number;
   configured: boolean;
   // Azure OpenAI (analysis engine)
@@ -18,10 +20,20 @@ export interface AppConfig {
   updated_by?: string | null;
 }
 
+/** A tenant subscription, and whether it grants Copilot. */
+export interface CopilotSku {
+  sku_id: string;
+  name: string;
+  grants_copilot: boolean;
+  seats: number;
+  assigned: number;
+}
+
 export interface TestConnectionResult {
   ok: boolean;
   token_acquired: boolean;
   subscribed_skus: boolean;
+  copilot_skus?: CopilotSku[];
   directory_read: boolean;
   copilot_licensed_users: number | null;
   detail: string | null;
@@ -281,12 +293,82 @@ export interface ConversationDetail {
   prompts: ConversationPrompt[];
 }
 
+/** One day of activity (GET /metrics/daily). */
+export interface DailyPoint {
+  date: string;
+  prompts: number;
+  conversations: number;
+}
+
+export interface BriefingPeriod {
+  prompts: number;
+  conversations: number;
+  people: number;
+  avg_quality: number | null;
+  user_generated_pct: number;
+}
+
+export interface BriefingIntent {
+  name: string;
+  prompts: number;
+  prev_prompts: number;
+  avg_quality: number | null;
+}
+
+export interface BriefingTheme {
+  name: string;
+  conversations: number;
+}
+
+export interface BriefingLever {
+  lever: string;
+  score: number;
+}
+
+/** The executive briefing (GET /metrics/briefing). Every figure is SQL; the
+ *  prose around them is assembled in the browser from fixed thresholds. */
+export interface Briefing {
+  window_days: number;
+  period_start: string;
+  period_end: string;
+  previous_period_start: string;
+  current: BriefingPeriod;
+  previous: BriefingPeriod;
+  total_prompts: number;
+  top_intents: BriefingIntent[];
+  top_themes: BriefingTheme[];
+  levers: BriefingLever[];
+  low_quality_prompts: number;
+  people_needing_coaching: number;
+}
+
+/** One row of the tenant users listing (GET /metrics/users). */
+export interface DirectoryUser {
+  user_id: string;
+  user_principal_name: string | null;
+  display_name: string | null;
+  job_title: string | null;
+  department: string | null;
+  company_name: string | null;
+  office_location: string | null;
+  country: string | null;
+  manager_name: string | null;
+  user_type: string | null;
+  has_copilot_license: boolean;
+  prompts: number;
+}
+
 export interface PersonalCoaching {
   user_id: string;
   name: string;
   prompts: number;
   conversations: number;
   avg_quality: number | null;
+  /** The organisation's average, so the tile can say how this compares. */
+  org_avg_quality: number | null;
+  /** Days this person actually prompted on. */
+  active_days: number;
+  user_generated_prompts: number;
   user_generated_pct: number;
   gcse_mine: Gcse;
   gcse_team: Gcse;

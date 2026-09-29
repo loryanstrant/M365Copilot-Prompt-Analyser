@@ -24,8 +24,14 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api import metrics
-from api.auth import CurrentUser, get_current_user, require_org_view
+from api.auth import (
+    CurrentUser,
+    get_current_user,
+    personal_view_user_id,
+    require_org_view,
+)
 from api.metrics import PromptFilter
+from api.schemas import DirectoryUserOut
 from shared.db import get_session
 from shared.models import Prompt
 
@@ -87,6 +93,45 @@ async def get_people(session: AsyncSession = Depends(get_session)):
     sits behind the org gate — not something a rank-and-file viewer should see.
     """
     return await metrics.people(session)
+
+
+@router.get("/users", response_model=list[DirectoryUserOut])
+async def get_directory_users(
+    session: AsyncSession = Depends(get_session),
+) -> list[dict]:
+    """The imported tenant directory, for sorting and filtering in the UI.
+
+    Org-gated like the person picker, and for the same reason: it is a list of
+    named colleagues with their usage against their names, not something every
+    signed-in viewer should be handed.
+
+    Unpaginated on purpose: the page filters client-side so typing is instant,
+    and a tenant directory is tens of thousands of rows at the very most.
+    """
+    return await metrics.directory_users(session)
+
+
+@router.get("/daily")
+async def get_daily(
+    f: PromptFilter = Depends(get_filters),
+    session: AsyncSession = Depends(get_session),
+):
+    """Prompts and conversations per day, for the briefing's momentum chart."""
+    return await metrics.daily(session, f=f)
+
+
+@router.get("/briefing")
+async def get_briefing(
+    window_days: int = Query(default=30, ge=7, le=90),
+    session: AsyncSession = Depends(get_session),
+):
+    """The executive briefing: this period against the one before it.
+
+    Takes a window rather than the shared slicers on purpose — a briefing that
+    inherited somebody's saved filters would describe a subset while claiming to
+    describe the organisation.
+    """
+    return await metrics.briefing(session, window_days=window_days)
 
 
 @router.get("/summary")
@@ -238,9 +283,16 @@ async def get_about() -> dict:
 # their token. There is deliberately no "which user?" parameter: if the caller
 # could name the user, any viewer could read anyone's prompts by editing a URL.
 # --------------------------------------------------------------------------- #
-def _me_user_id(user: CurrentUser) -> str:
-    """The signed-in person's Entra object ID, or 404."""
-    if not user.oid:
+async def _me_user_id(user: CurrentUser, session: AsyncSession) -> str:
+    """The person this personal view belongs to, or 404.
+
+    Normally the Entra object ID from the token. The one exception is a local
+    admin bound to a demo persona, which is resolved in :func:`api.auth`. The
+    caller still cannot name anyone: the answer comes from the token and the
+    stored binding, never from the request.
+    """
+    me = await personal_view_user_id(user, session)
+    if not me:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=(
@@ -248,16 +300,18 @@ def _me_user_id(user: CurrentUser) -> str:
                 "work account to see your own coaching."
             ),
         )
-    return user.oid
+    return me
 
 
-def _me_filters(user: CurrentUser, base: PromptFilter) -> PromptFilter:
+async def _me_filters(
+    user: CurrentUser, base: PromptFilter, session: AsyncSession
+) -> PromptFilter:
     """Narrow the shared slicers down to just this person.
 
     Whatever else the caller filtered on, ``users`` is overwritten — never
     extended — so the personal view can only ever narrow, not widen.
     """
-    base.users = [_me_user_id(user)]
+    base.users = [await _me_user_id(user, session)]
     return base
 
 
@@ -267,7 +321,7 @@ async def get_my_coaching(
     session: AsyncSession = Depends(get_session),
 ):
     """This person's own coaching: quality, GCSE levers vs the team, focus."""
-    return await metrics.personal(session, _me_user_id(user))
+    return await metrics.personal(session, await _me_user_id(user, session))
 
 
 @me_router.get("/summary")
@@ -276,7 +330,7 @@ async def get_my_summary(
     f: PromptFilter = Depends(get_filters),
     session: AsyncSession = Depends(get_session),
 ):
-    return await metrics.summary(session, f=_me_filters(user, f))
+    return await metrics.summary(session, f=await _me_filters(user, f, session))
 
 
 @me_router.get("/conversations")
@@ -287,7 +341,7 @@ async def get_my_conversations(
     session: AsyncSession = Depends(get_session),
 ):
     return await metrics.conversations_table(
-        session, f=_me_filters(user, f), limit=limit
+        session, f=await _me_filters(user, f, session), limit=limit
     )
 
 
@@ -301,7 +355,11 @@ async def get_my_prompts(
     session: AsyncSession = Depends(get_session),
 ):
     return await metrics.prompts_table(
-        session, f=_me_filters(user, f), limit=limit, offset=offset, search=search
+        session,
+        f=await _me_filters(user, f, session),
+        limit=limit,
+        offset=offset,
+        search=search,
     )
 
 
@@ -317,7 +375,7 @@ async def get_my_conversation_detail(
     data, so ownership is confirmed against the token before anything is
     returned — otherwise guessing ids would read other people's threads.
     """
-    me = _me_user_id(user)
+    me = await _me_user_id(user, session)
     owners = set(
         (
             await session.execute(

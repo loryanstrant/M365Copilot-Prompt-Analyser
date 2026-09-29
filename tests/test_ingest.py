@@ -25,6 +25,7 @@ from worker.ingest import run_ingest
 
 NOW = datetime(2026, 7, 29, 12, 0, 0, tzinfo=timezone.utc)
 SKU = "639dec6b-bb19-468b-871c-c5c441c4b0cb"
+COPILOT_PLAN = "3f30311c-6b1e-48a4-ab79-725b469da960"
 
 
 class FakeGraph:
@@ -68,11 +69,18 @@ def _config() -> AppConfig:
 
 
 def _fake_graph() -> FakeGraph:
-    licensed = [{"id": "user-1"}, {"id": "user-2"}]
+    # Graph returns assignedLicenses on these (the ingest asks for them), and
+    # the app checks the Copilot service plan is not disabled per assignment,
+    # so the fake has to carry them or it is not testing the real path.
+    licensed = [
+        {"id": "user-1", "assignedLicenses": [{"skuId": SKU, "disabledPlans": []}]},
+        {"id": "user-2", "assignedLicenses": [{"skuId": SKU, "disabledPlans": []}]},
+    ]
     skus = [
         {
             "skuId": SKU,
             "capabilityStatus": "Enabled",
+            "servicePlans": [{"servicePlanId": COPILOT_PLAN}],
             "consumedUnits": 2,
             "prepaidUnits": {"enabled": 5, "suspended": 0, "warning": 0, "lockedOut": 0},
         },
@@ -86,7 +94,7 @@ def _fake_graph() -> FakeGraph:
             "userType": "Member",
             "accountEnabled": True,
             "displayName": "Alice",
-            "assignedLicenses": [{"skuId": SKU}],
+            "assignedLicenses": [{"skuId": SKU, "disabledPlans": []}],
             "manager": {"id": "mgr-1"},
         },
         {  # excluded: onmicrosoft.com service account
@@ -180,3 +188,48 @@ async def test_watermark_advances():
         for st in states:
             assert st.watermark is not None
             assert st.last_status == "ok"
+
+
+@pytest.mark.asyncio
+async def test_a_tenant_with_no_copilot_subscription_asks_graph_for_nothing(session):
+    """An empty granting set must not become an empty Graph $filter.
+
+    Built from no SKUs, the filter clause is blank, and Graph either rejects it
+    or honours it as "no filter" and answers with the whole directory — on every
+    ingest. So the snapshot is cleared and the call is never made.
+    """
+    from shared.models import LicensedUser
+    from worker.ingest import sync_licensed_users
+
+    session.add(LicensedUser(user_id="stale-user"))
+    await session.commit()
+
+    class Tripwire:
+        asked = False
+
+        async def iter_licensed_users(self, sku_ids):
+            Tripwire.asked = True
+            if False:  # pragma: no cover - never reached
+                yield {}
+
+        async def get_subscribed_skus(self):
+            return []
+
+    count = await sync_licensed_users(session, Tripwire(), _config(), set())
+    await session.commit()
+
+    assert count == 0
+    assert Tripwire.asked is False
+    remaining = await session.scalar(
+        select(func.count()).select_from(LicensedUser)
+    )
+    assert remaining == 0
+
+
+@pytest.mark.asyncio
+async def test_the_graph_client_yields_nothing_for_an_empty_sku_list():
+    """The guard is in the client too, so any other caller is covered."""
+    from worker.graph import GraphClient
+
+    client = GraphClient.__new__(GraphClient)
+    assert [u async for u in client.iter_licensed_users([])] == []

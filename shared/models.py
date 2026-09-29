@@ -180,9 +180,10 @@ class AppConfig(Base):
     tenant_id: Mapped[str | None] = mapped_column(Text)
     client_id: Mapped[str | None] = mapped_column(Text)
     client_secret_encrypted: Mapped[str | None] = mapped_column(Text)
-    copilot_sku_ids: Mapped[list[str]] = mapped_column(
-        StrArray, default=["639dec6b-bb19-468b-871c-c5c441c4b0cb"]
-    )
+    # Manual override for Copilot licence detection. Empty means "detect",
+    # which asks the tenant which SKUs carry the Graph-grounded chat service
+    # plan (see worker.licensing) and is right for almost every tenant.
+    copilot_sku_ids: Mapped[list[str]] = mapped_column(StrArray, default=list)
     report_access_group_id: Mapped[str | None] = mapped_column(Text)
     # Membership of this group unlocks the organisation-wide view. Blank means
     # the org view is open to everyone who can sign in, which is how the app
@@ -191,6 +192,14 @@ class AppConfig(Base):
     # and repurposing it would hand a personal view to people a tenant had
     # deliberately excluded.
     org_view_group_id: Mapped[str | None] = mapped_column(Text)
+    # Membership of this group grants administrator rights, so admin does not
+    # have to be a shared username and password. Blank grants admin to nobody:
+    # unlike the org view, administration fails closed.
+    admin_group_id: Mapped[str | None] = mapped_column(Text)
+    # Set only by a demo seed: the seeded directory user the local admin account
+    # stands in for, so the personal pages can be opened without an Entra
+    # sign-in. Cleared when demo data is cleared. See scripts.seed_demo.
+    demo_persona_user_id: Mapped[str | None] = mapped_column(Text)
     backfill_days: Mapped[int] = mapped_column(Integer, default=30)
     schedule_cron: Mapped[str | None] = mapped_column(Text)
     # --- Azure OpenAI (analysis engine) ---

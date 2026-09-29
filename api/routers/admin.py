@@ -41,7 +41,9 @@ logger = logging.getLogger("api.admin")
 
 router = APIRouter(prefix="/admin", tags=["admin"], dependencies=[Depends(require_admin)])
 
-_DEFAULT_SKUS = ["639dec6b-bb19-468b-871c-c5c441c4b0cb"]
+# Empty means "detect from the tenant's subscriptions" — see
+# worker.licensing. A populated list is a deliberate administrator override.
+_DEFAULT_SKUS: list[str] = []
 _ingest_lock = asyncio.Lock()
 _analysis_lock = asyncio.Lock()
 
@@ -56,6 +58,7 @@ def _to_out(cfg: AppConfig | None) -> AppConfigOut:
         copilot_sku_ids=list(cfg.copilot_sku_ids or []),
         report_access_group_id=cfg.report_access_group_id,
         org_view_group_id=cfg.org_view_group_id,
+        admin_group_id=cfg.admin_group_id,
         backfill_days=cfg.backfill_days,
         schedule_cron=cfg.schedule_cron,
         schedule_interval_hours=cfg.schedule_interval_hours or 24,
@@ -105,6 +108,8 @@ async def put_config(
         cfg.report_access_group_id = body.report_access_group_id.strip() or None
     if body.org_view_group_id is not None:
         cfg.org_view_group_id = body.org_view_group_id.strip() or None
+    if body.admin_group_id is not None:
+        cfg.admin_group_id = body.admin_group_id.strip() or None
     if body.backfill_days is not None:
         cfg.backfill_days = body.backfill_days
     if body.schedule_cron is not None:

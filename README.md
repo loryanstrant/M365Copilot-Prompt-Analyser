@@ -12,12 +12,25 @@ licence, no Power Platform, and no data leaves your subscription. Runs anywhere 
 > Community project, MIT-licensed. Not covered by a Microsoft support agreement.
 ## Screenshots
 
+These are desktop dashboards. They are built and checked at desktop widths — there
+is no mobile layout, and none is planned.
+
 ### Overview
 At-a-glance KPIs (conversations, average prompt quality, user-generated share,
 sentiment, high-quality rate, weakest GCSE lever) plus the conversation-quality
 distribution and sentiment mix.
 
 ![Overview](docs/screenshots/executive-summary.png)
+
+### Executive briefing
+The last 30 days against the 30 before, written out in sentences: volume and
+people prompting, how quality moved, the share of prompts people wrote themselves,
+what they asked for most, what their conversations were about, and the coaching
+watch-outs. Every figure is SQL and every sentence is assembled from fixed
+thresholds — **no language model writes any of it**, so it can be read out in front
+of a customer without anyone checking whether a number was invented.
+
+![Executive briefing](docs/screenshots/executive-briefing.png)
 
 ### Prompt quality
 Per-prompt scoring (1–10) across the four GCSE levers, the quality distribution,
@@ -34,11 +47,22 @@ prompt thread with each prompt's scores.
 
 ![Conversation detail](docs/screenshots/conversation-detail.png)
 
-### Personal coaching
-"Act as" any user to see the coaching view they'd get — their KPIs, a focus-area
-callout, GCSE-vs-team comparison, and their conversations.
+### Tenant users
+Everyone imported from your directory, with their job title, department, office,
+country, manager by **name** rather than object ID, whether they hold a Copilot
+licence, and how many prompts they have actually written. Any column can be
+filtered, so "who holds a licence and has never used it" is a two-click question.
 
-![Personal coaching](docs/screenshots/personal-coaching.png)
+![Tenant users](docs/screenshots/tenant-users.png)
+
+### Your coaching
+Each person's own view: their prompts, conversations, average quality against the
+organisation's, and how much of what they send is their own words — each with a
+subtitle that says what the number means rather than repeating its label. Plus a
+focus-area callout, their GCSE levers against the team's, and their own
+conversations.
+
+![Your coaching](docs/screenshots/personal-coaching.png)
 
 ### Usage breakdown & dark mode
 Per-app and per-intent volume and average quality, category mix, and GCSE-by-intent.
@@ -46,6 +70,9 @@ Every page supports a light and dark theme.
 
 ![Usage breakdown](docs/screenshots/usage-breakdown.png)
 ![Overview in dark mode](docs/screenshots/executive-summary-dark.png)
+
+Every screenshot here exists in both themes; see
+[`docs/screenshots/README.md`](docs/screenshots/README.md) for how they are produced.
 
 
 ## Deploy to Azure (one click)
@@ -93,8 +120,10 @@ Prompts / Conversations; the **Backfill** page has a run history table with per-
 ### Enabling Entra ID single sign-on (optional)
 
 By default the dashboard is protected by the single admin password. You can additionally let
-colleagues sign in with their **work account** (read-only viewer role) — administration stays
-behind the password.
+colleagues sign in with their **work account**, and name an Entra group whose members
+**administer** the app, so administration no longer means passing one password around. The local
+admin account keeps working either way — it is the break-glass account, and it is the one you use
+to set the admin group in the first place.
 
 Sign-in is performed by the app itself, so it works the same wherever you run it: Azure, Docker
 on a NAS, Kubernetes, anywhere. There is nothing to configure on the hosting platform.
@@ -108,6 +137,15 @@ second set of credentials to manage:
    and paste that redirect URI.
 4. Optionally set a **report access group** in Settings to restrict who can view the dashboard. If
    you do, add a **groups** claim under **Token configuration** on the app registration.
+5. Optionally set an **admin group** in Settings. Its members get administrator rights when they
+   sign in with Entra. Left blank, **nobody** gets admin by single sign-on — unlike the
+   organisation-view group below, this one fails closed, because administration has always been an
+   explicit grant and an upgrade must not hand it to everyone who can sign in.
+
+Group membership for both gates is re-read per request rather than stamped into the sign-in token,
+so removing someone takes effect within minutes instead of at their next sign-in. No extra Graph
+permission is needed: the app-only credential you already entered can answer the membership check.
+The sidebar shows whoever is signed in by **display name**, with their UPN beneath it.
 
 The sign-in page then shows a **"Sign in with Microsoft"** button.
 
@@ -139,6 +177,12 @@ who can open the report at all, while this one decides who can look beyond thems
 re-checked on every request rather than stamped into the sign-in token, so removing someone from the
 group takes effect in minutes instead of at their next sign-in.
 
+**Evaluating without Entra?** Loading demo data binds the local admin account to one of the seeded
+directory people, so **Your coaching** and the rest of the personal pages work without any
+single sign-on at all. The binding is written only by an explicit demo seed, is cleared when you
+clear demo data, and is dropped automatically the first time a real collection succeeds — so a
+fictional person's prompts can never end up presented as yours beside live tenant figures.
+
 ### Where to find run history, logs, and errors
 
 - **In the app:** **Settings → Data status** (last run + counts) and **Settings → Historical
@@ -161,22 +205,40 @@ one-click Azure deploy). The one addition here is an **LLM analysis stage**.
 
 ## What it does
 
+A desktop web dashboard — there is no mobile layout.
+
 - **Overview** — KPIs (conversations, average prompt quality, user-generated share,
   sentiment, high-quality rate, weakest GCSE lever) plus the conversation-quality distribution.
+- **Executive briefing** — this period against the last, in plain English: volume, people
+  prompting, average quality out of 10, the share of prompts written by hand rather than
+  accepted from a suggestion, the most common request types with their movement, the themes
+  running through conversations, and the coaching watch-outs. **Deterministic** — the figures
+  are SQL and the sentences are assembled from fixed thresholds, so the briefing cannot invent
+  a number even though the app has Azure OpenAI configured.
 - **Usage breakdown** — volume and quality split by app, department, office and category.
 - **Prompt quality** — GCSE lever scores (Goal, Context, Source, Expectation), quality trends,
   and the prompts most in need of help.
 - **Conversations** — drill into any conversation, see its per-prompt scores and governance flags.
-- **Personal coaching** — every signed-in colleague gets their own coaching view (their prompts,
-  quality and GCSE levers), with the organisation-wide reports gated separately. See
-  [Your coaching vs. the organisation view](#your-coaching-vs-the-organisation-view).
+- **Tenant users** — the imported directory joined to the usage: licence held or not (shown as
+  ● / ○ plus the word), prompts written, and manager resolved to a name. People with no activity
+  are listed rather than filtered out, because an unused licence is the row worth finding.
+- **Your coaching** — every signed-in colleague gets their own coaching view (their prompts,
+  quality against the organisation's, and GCSE levers), with the organisation-wide reports gated
+  separately. See [Your coaching vs. the organisation view](#your-coaching-vs-the-organisation-view).
 - **People coaching (organisation)** — pick anyone and see the coaching view they would get.
 - **Settings (admin)** — Graph and Azure OpenAI config (secrets write-only, Fernet-encrypted),
   a guided app-registration wizard, test connection, run now, demo data, and a resumable
   **backfill** with live progress.
-- **Entra single sign-on (optional)** — colleagues view the report with their work account
-  (read-only), optionally gated to an Entra security group.
-- Global filters, CSV export, and a **light/dark** theme throughout.
+- **Entra single sign-on (optional)** — colleagues view the report with their work account,
+  optionally gated to an Entra security group. Named people can also be made **administrators**
+  by Entra group, so administration does not mean sharing one password; the sidebar shows who is
+  signed in by display name.
+- **Copilot licences are detected, not configured.** Anyone holding a SKU that includes the
+  *Microsoft Copilot with Graph-grounded chat* service plan counts — which covers Microsoft 365
+  Copilot (both SKUs), Microsoft 365 E7, Copilot for Sales and any new Copilot subscription,
+  with nothing to enter. A bundle assigned with Copilot switched off correctly does not count.
+- Global filters, CSV export, and a **light/dark** theme throughout. Status is always shown as a
+  shape and a word (● ◐ ○), never by colour alone.
 
 ### How the scoring works
 
@@ -302,7 +364,10 @@ On first start an admin login is seeded from `ADMIN_USERNAME` / `ADMIN_PASSWORD`
    for history.
 6. Explore the dashboard.
 
-Just evaluating? Skip steps 3–5 and use **Settings → Demo data → Load demo data** instead.
+Just evaluating? Skip steps 3–5 and use **Settings → Demo data → Load demo data** instead. That
+seeds a small directory of people with departments, offices, countries and a reporting line, so the
+slicers, the person picker and the **Tenant users** listing all work — and it binds your admin
+account to one of them so the personal pages are reachable too.
 
 ## Data & privacy notes
 

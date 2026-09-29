@@ -36,6 +36,8 @@ export default function Layout({ children }: { children: ReactNode }) {
   const { theme, toggle } = useTheme();
   const canViewOrg = user?.can_view_org ?? false;
   const hasPersonal = user?.has_personal_view ?? false;
+  const primaryName = user?.display_name ?? user?.upn ?? user?.username;
+  const identifier = user?.upn ?? user?.username;
 
   return (
     <div className="flex h-full">
@@ -71,6 +73,9 @@ export default function Layout({ children }: { children: ReactNode }) {
               <NavLink to="/overview" className={navClass}>
                 Overview
               </NavLink>
+              <NavLink to="/briefing" className={navClass}>
+                Executive briefing
+              </NavLink>
               <NavLink to="/usage" className={navClass}>
                 Usage breakdown
               </NavLink>
@@ -83,6 +88,9 @@ export default function Layout({ children }: { children: ReactNode }) {
               <NavLink to="/coaching" className={navClass}>
                 People coaching
               </NavLink>
+              <NavLink to="/users" className={navClass}>
+                Tenant users
+              </NavLink>
             </>
           )}
 
@@ -92,10 +100,18 @@ export default function Layout({ children }: { children: ReactNode }) {
               <NavLink to="/settings" className={navClass}>
                 Settings
               </NavLink>
+              {/* Both of these were routed and linked from nowhere, so two
+                  working pages could only be reached by typing the URL. */}
+              <NavLink to="/backfill" className={navClass}>
+                Historical backfill
+              </NavLink>
             </>
           )}
 
           <NavSectionLabel>Help</NavSectionLabel>
+          <NavLink to="/help" className={navClass}>
+            Setup guide
+          </NavLink>
           <NavLink to="/about" className={navClass}>
             About
           </NavLink>
@@ -109,10 +125,25 @@ export default function Layout({ children }: { children: ReactNode }) {
             <span aria-hidden>{theme === "dark" ? "🌙" : "☀️"}</span>
           </button>
           <div>
-            <div className="font-medium text-slate-800 dark:text-slate-100">
-              {user?.username}
+            <div
+              className="truncate font-medium text-slate-800 dark:text-slate-100"
+              title={primaryName}
+            >
+              {primaryName}
             </div>
-            <div className="mb-3 text-xs uppercase tracking-wide text-slate-400">
+            {/* The identifier line is the UPN, not the account name: with demo
+                data bound, the local admin is a directory person whose account
+                name ("admin") says nothing about who is on screen. Suppressed
+                when it would only repeat the line above it. */}
+            {identifier && identifier !== primaryName && (
+              <div
+                className="truncate text-xs text-slate-400 dark:text-slate-500"
+                title={identifier}
+              >
+                {identifier}
+              </div>
+            )}
+            <div className="mb-3 mt-1 text-xs uppercase tracking-wide text-slate-400">
               {user?.role}
             </div>
             <button

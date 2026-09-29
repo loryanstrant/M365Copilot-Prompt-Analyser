@@ -81,6 +81,26 @@ const convColumns: Column<ConversationRow>[] = [
   },
 ];
 
+/**
+ * How this person's average quality compares with the organisation's.
+ *
+ * Shape plus words, never colour alone — the people who read these reports
+ * include the one who cannot tell a green tick from a red cross. Half a point
+ * either way is noise on a 1-10 scale, so that band reads as "in line with"
+ * rather than being called a win or a loss.
+ */
+function qualityComparison(
+  mine: number | null,
+  org: number | null,
+): string | undefined {
+  if (mine == null || org == null) return undefined;
+  const delta = mine - org;
+  const average = `the organisation average of ${org.toFixed(1)}`;
+  if (delta > 0.5) return `● Above ${average}`;
+  if (delta < -0.5) return `○ Below ${average}`;
+  return `◐ In line with ${average}`;
+}
+
 function OrgViewBanner({ canViewOrg }: { canViewOrg: boolean }) {
   // The switch is shown locked rather than hidden: people should be able to see
   // that organisation reporting exists and who to ask, instead of wondering
@@ -205,12 +225,38 @@ export default function PersonalPage() {
       {!loading && !error && hasData && coaching && (
         <>
           <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
-            <KpiCard label="Your prompts" value={coaching.prompts} />
-            <KpiCard label="Your conversations" value={coaching.conversations} />
-            <KpiCard label="Avg quality" value={score10(coaching.avg_quality)} />
+            <KpiCard
+              label="Your prompts"
+              value={coaching.prompts}
+              hint={
+                coaching.active_days > 0
+                  ? `Across ${coaching.active_days.toLocaleString()} ${
+                      coaching.active_days === 1 ? "day" : "days"
+                    } you used Copilot`
+                  : undefined
+              }
+            />
+            <KpiCard
+              label="Your conversations"
+              value={coaching.conversations}
+              hint={
+                coaching.conversations > 0
+                  ? `${(coaching.prompts / coaching.conversations).toFixed(1)} prompts per conversation on average`
+                  : undefined
+              }
+            />
+            <KpiCard
+              label="Avg quality"
+              value={score10(coaching.avg_quality)}
+              hint={qualityComparison(
+                coaching.avg_quality,
+                coaching.org_avg_quality,
+              )}
+            />
             <KpiCard
               label="User-generated"
               value={pctSmart(coaching.user_generated_pct)}
+              hint={`${coaching.user_generated_prompts.toLocaleString()} of ${coaching.prompts.toLocaleString()} prompts were in your own words`}
             />
           </div>
 
