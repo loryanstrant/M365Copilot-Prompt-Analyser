@@ -145,6 +145,27 @@ async def is_admin(user: CurrentUser, session: AsyncSession) -> bool:
     return await is_group_member(principal, group_id, session)
 
 
+async def personal_view_user_id(
+    user: CurrentUser, session: AsyncSession
+) -> str | None:
+    """The directory user whose personal view this account may see, if any.
+
+    Normally that is the signed-in person themselves, taken from the token's
+    Entra object ID. The exception is the local password account while demo data
+    is loaded: it has no directory identity of its own, so it stands in for the
+    seeded demo persona. Without that, the personal pages cannot be opened at
+    all without Entra, and anyone evaluating the product never sees them.
+
+    The binding is only ever written by an explicit demo seed and is cleared with
+    the demo data, so a real deployment that has never seeded returns None here
+    and behaves exactly as before.
+    """
+    if user.oid:
+        return user.oid
+    cfg = await session.get(AppConfig, 1)
+    return (cfg.demo_persona_user_id if cfg else None) or None
+
+
 async def effective_role(user: CurrentUser, session: AsyncSession) -> str:
     """The role the UI should act on, after the admin group is considered.
 
@@ -223,6 +244,7 @@ __all__ = [
     "get_current_user",
     "get_session",
     "is_admin",
+    "personal_view_user_id",
     "require_admin",
     "require_org_view",
 ]

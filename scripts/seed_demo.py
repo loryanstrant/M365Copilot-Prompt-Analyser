@@ -9,8 +9,16 @@ Run inside the container / venv::
     python -m scripts.seed_demo            # ~40 conversations
     python -m scripts.seed_demo --conversations 100 --reset
 
-``--reset`` clears the prompts/analysis tables first. This only ever touches the
-three analysis tables; it never writes credentials or user accounts.
+``--reset`` clears the prompts/analysis tables first. It also seeds matching
+``entra_users`` rows and records one of them as the demo persona, so the
+directory-shaped parts of the UI work; it never writes credentials or user
+accounts.
+
+The directory rows matter more than they look. Every person picker, department,
+country and manager slicer in ``api.metrics`` is built by outer-joining
+``EntraUser`` onto ``Prompt.user_id``, so a demo instance with prompts but no
+directory shows people as raw ids (``user-00``) and every slicer empty — which
+is what it did before these rows existed.
 """
 from __future__ import annotations
 
@@ -23,7 +31,14 @@ from datetime import date, timedelta
 from sqlalchemy import delete
 
 from shared.db import SessionLocal
-from shared.models import ConversationAnalysis, Prompt, PromptAnalysis
+from shared.models import (
+    AppConfig,
+    ConversationAnalysis,
+    EntraUser,
+    LicensedUser,
+    Prompt,
+    PromptAnalysis,
+)
 
 APPS = [
     "Copilot Chat",
@@ -72,6 +87,70 @@ _INSIGHTS = [
 ]
 
 
+# The directory behind the demo prompts. The first twelve line up with the
+# ``user-NN`` ids the prompt loop generates; the last two hold a licence and
+# have no prompts at all, which is the row a tenant most wants to find on the
+# Tenant users listing and would never appear if everyone here had activity.
+#
+# Ids are ``user-NN`` rather than GUIDs on purpose: they cannot collide with a
+# real Entra object ID, so demo data and live data can never be confused for
+# each other even in the same database.
+_PERSONAS: list[tuple[str, str, str, str, str, str, str | None]] = [
+    # (id, name, job title, department, office, country, manager)
+    ("user-00", "Nadia Okonjo", "Chief Operating Officer", "Executive", "Melbourne", "Australia", None),
+    ("user-01", "Tomas Lindqvist", "Head of Finance", "Finance", "Melbourne", "Australia", "user-00"),
+    ("user-02", "Elsie Duarte", "Programme Manager", "Operations", "Melbourne", "Australia", "user-00"),
+    ("user-03", "Priya Raghunathan", "Financial Analyst", "Finance", "Sydney", "Australia", "user-01"),
+    ("user-04", "Callum Reidy", "Management Accountant", "Finance", "Sydney", "Australia", "user-01"),
+    ("user-05", "Marta Kowalczyk", "Operations Lead", "Operations", "Wellington", "New Zealand", "user-02"),
+    ("user-06", "Dev Anand", "Business Analyst", "Operations", "Wellington", "New Zealand", "user-02"),
+    ("user-07", "Grace Mbeki", "Marketing Manager", "Marketing", "Brisbane", "Australia", "user-00"),
+    ("user-08", "Hiroshi Tanaka", "Content Strategist", "Marketing", "Brisbane", "Australia", "user-07"),
+    ("user-09", "Aoife Brennan", "People Partner", "People", "Dublin", "Ireland", "user-00"),
+    ("user-10", "Samir Haddad", "IT Service Manager", "Technology", "Melbourne", "Australia", "user-00"),
+    ("user-11", "Jo Whitcombe", "Solution Architect", "Technology", "Melbourne", "Australia", "user-10"),
+    ("user-12", "Rhiannon Pryce", "Legal Counsel", "Legal", "Cardiff", "United Kingdom", "user-00"),
+    ("user-13", "Ben Osei", "Procurement Specialist", "Finance", "Manchester", "United Kingdom", "user-01"),
+]
+
+# Everyone except two — a directory with universal licensing tells a tenant
+# nothing about who is missing one.
+_UNLICENSED = {"user-08", "user-09"}
+
+# The persona the local admin account is bound to while demo data is loaded, so
+# the personal pages can be reached without an Entra sign-in. Chosen for having
+# a manager, a team around them and a middling amount of activity.
+DEMO_PERSONA_USER_ID = "user-02"
+
+# How many of the personas the prompt generator spreads activity across. The
+# rest are directory-only, deliberately.
+_ACTIVE_PERSONAS = 12
+
+
+def _persona_rows() -> list[dict[str, object]]:
+    rows: list[dict[str, object]] = []
+    for uid, name, title, dept, office, country, manager in _PERSONAS:
+        local = name.lower().replace(" ", ".").replace("'", "")
+        rows.append(
+            {
+                "user_id": uid,
+                "upn": f"{local}@contoso.com",
+                "email": f"{local}@contoso.com",
+                "display_name": name,
+                "job_title": title,
+                "company_name": "Contoso",
+                "department": dept,
+                "office_location": office,
+                "country": country,
+                "manager_id": manager,
+                "account_enabled": True,
+                "user_type": "Member",
+                "has_copilot_license": uid not in _UNLICENSED,
+            }
+        )
+    return rows
+
+
 def _rand_gcse() -> dict[str, int]:
     base = random.randint(3, 9)
     return {lever: max(1, min(10, base + random.randint(-2, 2))) for lever in
@@ -84,7 +163,25 @@ async def seed(conversations: int, reset: bool) -> dict[str, int]:
             await session.execute(delete(PromptAnalysis))
             await session.execute(delete(ConversationAnalysis))
             await session.execute(delete(Prompt))
+            await session.execute(delete(EntraUser))
+            await session.execute(delete(LicensedUser))
             await session.commit()
+
+        for row in _persona_rows():
+            await session.merge(EntraUser(**row))
+            if row["has_copilot_license"]:
+                await session.merge(LicensedUser(user_id=row["user_id"]))
+
+        # Bind the local admin account to one of these people, so the personal
+        # pages can be reached without an Entra sign-in. Without it, anyone
+        # evaluating with demo data can never open the pages the README
+        # advertises: has_personal_view needs a directory identity, and the
+        # password admin has none.
+        cfg = await session.get(AppConfig, 1)
+        if cfg is None:
+            cfg = AppConfig(id=1)
+            session.add(cfg)
+        cfg.demo_persona_user_id = DEMO_PERSONA_USER_ID
 
         today = date.today()
         n_prompts = 0
@@ -109,7 +206,7 @@ async def seed(conversations: int, reset: bool) -> dict[str, int]:
                 session.add(
                     Prompt(
                         prompt_id=pid,
-                        user_id=f"user-{c % 12:02d}",
+                        user_id=f"user-{c % _ACTIVE_PERSONAS:02d}",
                         conversation_id=conv_id,
                         app_name=app,
                         prompt_date=day,
@@ -172,19 +269,29 @@ async def seed(conversations: int, reset: bool) -> dict[str, int]:
                 )
             )
         await session.commit()
-    return {"conversations": conversations, "prompts": n_prompts}
+    return {
+        "conversations": conversations,
+        "prompts": n_prompts,
+        "users": len(_PERSONAS),
+    }
 
 
 async def clear() -> dict[str, int]:
-    """Remove all seeded prompt/analysis data.
+    """Remove all seeded prompt/analysis/directory data.
 
-    Only touches the three analysis tables — credentials (``app_config``) and
-    user accounts (``app_users``) are never affected.
+    Credentials and user accounts are never affected. The demo persona binding
+    goes with the data: leaving it would hand the local admin a personal view
+    over people who are no longer there.
     """
     async with SessionLocal() as session:
         await session.execute(delete(ConversationAnalysis))
         await session.execute(delete(PromptAnalysis))
         await session.execute(delete(Prompt))
+        await session.execute(delete(EntraUser))
+        await session.execute(delete(LicensedUser))
+        cfg = await session.get(AppConfig, 1)
+        if cfg is not None:
+            cfg.demo_persona_user_id = None
         await session.commit()
     return {"cleared": 1}
 
@@ -203,7 +310,10 @@ def main() -> None:
         print("Demo data cleared.")
         return
     stats = asyncio.run(seed(args.conversations, args.reset))
-    print(f"Seeded {stats['prompts']} prompts across {stats['conversations']} conversations.")
+    print(
+        f"Seeded {stats['prompts']} prompts across {stats['conversations']} "
+        f"conversations for {stats['users']} directory users."
+    )
 
 
 if __name__ == "__main__":

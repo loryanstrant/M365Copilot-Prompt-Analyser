@@ -196,6 +196,10 @@ class AppConfig(Base):
     # have to be a shared username and password. Blank grants admin to nobody:
     # unlike the org view, administration fails closed.
     admin_group_id: Mapped[str | None] = mapped_column(Text)
+    # Set only by a demo seed: the seeded directory user the local admin account
+    # stands in for, so the personal pages can be opened without an Entra
+    # sign-in. Cleared when demo data is cleared. See scripts.seed_demo.
+    demo_persona_user_id: Mapped[str | None] = mapped_column(Text)
     backfill_days: Mapped[int] = mapped_column(Integer, default=30)
     schedule_cron: Mapped[str | None] = mapped_column(Text)
     # --- Azure OpenAI (analysis engine) ---

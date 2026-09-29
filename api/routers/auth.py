@@ -20,6 +20,7 @@ from api.auth import (
     create_access_token,
     effective_role,
     get_current_user,
+    personal_view_user_id,
 )
 from api.oidc import (
     STATE_COOKIE,
@@ -33,7 +34,7 @@ from api.oidc import (
 )
 from api.schemas import AuthConfigOut, LoginIn, TokenOut, UserOut
 from shared.db import get_session
-from shared.models import AppConfig
+from shared.models import AppConfig, EntraUser
 
 logger = logging.getLogger("api.auth")
 
@@ -159,11 +160,21 @@ async def me(
     user: CurrentUser = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
 ) -> UserOut:
+    me_id = await personal_view_user_id(user, session)
+    display_name, upn = user.display_name, user.upn
+    # A local admin standing in for a demo persona is, as far as the personal
+    # pages are concerned, that person — so the sidebar names them rather than
+    # the account. Only reached when a demo seed set the binding.
+    if me_id and not user.oid:
+        profile = await session.get(EntraUser, me_id)
+        if profile is not None:
+            display_name = profile.display_name or display_name
+            upn = profile.upn or upn
     return UserOut(
         username=user.username,
         role=await effective_role(user, session),
-        display_name=user.display_name,
-        upn=user.upn,
+        display_name=display_name,
+        upn=upn,
         can_view_org=await can_view_org(user, session),
-        has_personal_view=user.has_personal_view,
+        has_personal_view=me_id is not None,
     )
