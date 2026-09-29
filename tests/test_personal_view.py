@@ -338,3 +338,20 @@ async def test_shared_lookups_stay_open_to_everyone(client):
     assert (await client.get("/metrics/filters", headers=headers)).status_code == 200
     assert (await client.get("/metrics/freshness", headers=headers)).status_code == 200
     assert (await client.get("/metrics/about", headers=headers)).status_code == 200
+
+
+@pytest.mark.asyncio
+async def test_coaching_carries_what_the_stat_tiles_need(client):
+    """The four tiles on "Your coaching" each need a subtitle that says
+    something, and each of those figures has to come from the API rather than be
+    guessed in the browser: how many days this person was active, how many of
+    their prompts were their own words, and the organisation's average to compare
+    their own against."""
+    await _seed_activity()
+    body = (await client.get("/metrics/me/coaching", headers=_viewer_headers())).json()
+    assert body["prompts"] == MINE
+    # Every seeded prompt of theirs is on one day.
+    assert body["active_days"] == 1
+    assert body["user_generated_prompts"] <= body["prompts"]
+    # The organisation average spans both people, so it is not this person's own.
+    assert body["org_avg_quality"] is not None

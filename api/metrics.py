@@ -790,6 +790,13 @@ async def personal(session: AsyncSession, user_id: str) -> dict:
     conversations = await session.scalar(
         select(func.count(distinct(b.c.conversation_id)))
     ) or 0
+    # Days this person actually prompted on, and the organisation's average
+    # quality: both exist so the stat tiles can say something ("across 11 days",
+    # "above the organisation average") instead of restating their own labels.
+    active_days = await session.scalar(
+        select(func.count(distinct(b.c.prompt_date)))
+    ) or 0
+    org_avg_quality = await session.scalar(select(func.avg(PromptAnalysis.quality_score)))
 
     mine: dict[str, float | None] = {}
     team: dict[str, float | None] = {}
@@ -815,6 +822,9 @@ async def personal(session: AsyncSession, user_id: str) -> dict:
         "prompts": total,
         "conversations": conversations,
         "avg_quality": _round(avg_quality),
+        "org_avg_quality": _round(org_avg_quality),
+        "active_days": active_days,
+        "user_generated_prompts": user_gen,
         "user_generated_pct": round(100.0 * user_gen / total, 1) if total else 0.0,
         "gcse_mine": mine,
         "gcse_team": team,

@@ -315,6 +315,11 @@ export interface PersonalCoaching {
   prompts: number;
   conversations: number;
   avg_quality: number | null;
+  /** The organisation's average, so the tile can say how this compares. */
+  org_avg_quality: number | null;
+  /** Days this person actually prompted on. */
+  active_days: number;
+  user_generated_prompts: number;
   user_generated_pct: number;
   gcse_mine: Gcse;
   gcse_team: Gcse;
