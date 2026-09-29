@@ -179,3 +179,17 @@ async def test_a_token_issued_before_display_names_still_works(client):
     body = (await client.get("/auth/me", headers=_sso_headers())).json()
     assert body["display_name"] is None
     assert body["username"] == "ada@contoso.com"
+
+
+@pytest.mark.asyncio
+async def test_the_upn_is_reported_separately_from_the_account_name(client):
+    """The sidebar's identifier line is the UPN, not the account name.
+
+    They are the same for an Entra sign-in, but not for a local admin bound to a
+    demo persona — there the account name is "admin" and says nothing about who
+    is on screen, so the two must be separate fields.
+    """
+    body = (
+        await client.get("/auth/me", headers=_sso_headers(display_name="Ada Lovelace"))
+    ).json()
+    assert body["upn"] == "ada@contoso.com"
