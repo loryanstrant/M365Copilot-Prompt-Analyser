@@ -77,6 +77,52 @@ run showing its error. Status is a shape plus a word (● ◐ ○), never colour
 
 ![Scan history](docs/screenshots/scan-history.png)
 
+### People coaching
+
+The same coaching view for anybody in the tenant, for a manager or an enablement
+lead — picked by name rather than by editing a URL. It reads "This person" and
+"Their team" rather than "you", because the reader is not the subject.
+
+This page carried the same mislabelled comparison as the personal one: a bar
+drawn from the whole tenant and called a *team average*, read by somebody about
+a colleague. It is filtered to the person's actual team now, and withheld when
+that team is too small to show without identifying someone.
+
+![People coaching](docs/screenshots/people-coaching.png)
+
+### Historical backfill
+
+Pulling history rather than waiting for the nightly collection, with live
+progress and a per-run table showing prompts, lookback and status. Resumable —
+a backfill that stops partway does not start again from the beginning.
+
+![Historical backfill](docs/screenshots/backfill.png)
+
+### Settings
+
+Graph and Azure OpenAI configuration with **Test connection** for each, the
+guided app-registration wizard, the group fields that decide who can open the
+report and who administers it, demo data, and the manual run controls. Secrets
+are write-only: they can be set and replaced, never read back.
+
+![Settings](docs/screenshots/settings.png)
+
+### Setup guide
+
+The in-app version of the prerequisites, including the one-shot PowerShell that
+creates the app registration, grants admin consent and prints the three values
+Settings asks for — so a first run does not need this README open beside it.
+
+![Setup guide](docs/screenshots/setup-guide.png)
+
+### About
+
+Which build is actually running, in words. Worth a page of its own because
+"have my changes deployed?" is otherwise answered by guesswork; the same stamp
+is on the sign-in page, where you can read it without getting in.
+
+![About](docs/screenshots/about.png)
+
 ### Usage breakdown & dark mode
 Per-app and per-intent volume and average quality, category mix, and GCSE-by-intent.
 Every page supports a light and dark theme.

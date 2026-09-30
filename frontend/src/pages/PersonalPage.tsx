@@ -292,7 +292,7 @@ export default function PersonalPage() {
               initialSort={{ key: "conversation", dir: "desc" }}
               emptyMessage="No conversations of yours have been analysed yet."
               columns={convColumns}
-              maxBodyHeight={420}
+              maxBodyHeight="max(240px, calc(100vh - 24rem))"
               rowClassName={(r) =>
                 `cursor-pointer transition-colors hover:bg-slate-50 dark:hover:bg-slate-700/40 ${
                   r.conversation_id === selectedConv ? "bg-brand-50 dark:bg-brand-900/20" : ""

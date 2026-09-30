@@ -269,7 +269,7 @@ export default function PromptQualityPage() {
           initialSort={{ key: "quality", dir: "desc" }}
           emptyMessage="No prompts match this selection."
           columns={columns}
-          maxBodyHeight={560}
+          maxBodyHeight="max(240px, calc(100vh - 20rem))"
         />
       </div>
     </div>
