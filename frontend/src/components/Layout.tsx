@@ -105,6 +105,9 @@ export default function Layout({ children }: { children: ReactNode }) {
               <NavLink to="/backfill" className={navClass}>
                 Historical backfill
               </NavLink>
+              <NavLink to="/scan-history" className={navClass}>
+                Scan history
+              </NavLink>
             </>
           )}
 

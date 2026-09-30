@@ -12,6 +12,7 @@ import OverviewPage from "./pages/OverviewPage";
 import LoginPage from "./pages/LoginPage";
 import PersonalPage from "./pages/PersonalPage";
 import PromptQualityPage from "./pages/PromptQualityPage";
+import ScanHistoryPage from "./pages/ScanHistoryPage";
 import SettingsPage from "./pages/SettingsPage";
 import SetupGuidePage from "./pages/SetupGuidePage";
 import UsageBreakdownPage from "./pages/UsageBreakdownPage";
@@ -78,6 +79,10 @@ export default function App() {
           <Route
             path="/backfill"
             element={user.role === "admin" ? <BackfillPage /> : <Navigate to="/" replace />}
+          />
+          <Route
+            path="/scan-history"
+            element={user.role === "admin" ? <ScanHistoryPage /> : <Navigate to="/" replace />}
           />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>

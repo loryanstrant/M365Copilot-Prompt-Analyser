@@ -188,12 +188,56 @@ async def test_conversation_detail_ordered_and_scored(session) -> None:
 @pytest.mark.asyncio
 async def test_personal_per_user(session) -> None:
     await _seed(session)
+    # _seed alone only gives u1 one other person (u2) with prompts, which is
+    # below MIN_TEAM_PEERS — too small for a real organisation series. Seed
+    # four more people with prompts so the organisation clears its own
+    # disclosure floor without touching Eng (u1's department must stay a
+    # department of one, so the team stays withheld).
+    for i in range(4):
+        session.add(
+            EntraUser(user_id=f"org{i}", display_name=f"Org{i}", department="Sales")
+        )
+        session.add(
+            Prompt(
+                prompt_id=f"p-org{i}",
+                user_id=f"org{i}",
+                conversation_id=f"c-org{i}",
+                app_name="Copilot Chat",
+                prompt_date=date(2026, 8, 1),
+                created_at=datetime(2026, 8, 1, 9, i, tzinfo=timezone.utc),
+                prompt_text="hello",
+                name_confidence=1,
+                sensitive_confidence=1,
+                curse_confidence=1,
+                analysed=True,
+            )
+        )
+        session.add(
+            PromptAnalysis(
+                prompt_id=f"p-org{i}",
+                conversation_id=f"c-org{i}",
+                user_generated=True,
+                sentiment="neutral",
+                quality_score=5,
+                quality_rationale="r",
+                category="ask",
+                gcse_goal=5,
+                gcse_context=5,
+                gcse_source=5,
+                gcse_expectation=5,
+            )
+        )
+    await session.commit()
+
     p = await metrics.personal(session, "u1")
     assert p["name"] == "Alice"
     assert p["prompts"] == 2
     assert p["conversations"] == 1
     assert p["avg_quality"] == 5.0
     assert p["weakest_lever"] == "source"  # gcse_source is the lowest lever
-    # team GCSE differs from mine (team spans all users).
     assert p["gcse_mine"]["source"] is not None
-    assert p["gcse_team"]["source"] is not None
+    # The comparison replaced a tenant-wide average labelled "Team average".
+    # Alice is the only person in Eng, so the team must be withheld even
+    # though the organisation (now 5 others) clears its own floor.
+    assert p["comparison"]["team"] is None
+    assert p["comparison"]["organisation"]["source"] is not None

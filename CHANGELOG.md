@@ -5,11 +5,77 @@ Versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+Two suite-wide passes, neither released yet.
+
+### Comparisons, timelines and scan history — the second pass
+Spec: [`docs/specs/comparisons-and-timelines.md`](docs/specs/comparisons-and-timelines.md).
+
+#### Fixed
+
+- **The "GCSE vs team" chart was not showing a team.** Its second bar came from
+  `avg(gcse_lever)` with no filter at all — the average across the entire tenant,
+  labelled "Team average" — on both the personal page and the people-coaching
+  page. In a large tenant that is a materially different number from the one the
+  label promised, and people were reading it about themselves. It is corrected
+  rather than relabelled.
+
+#### Added
+
+- **How you compare** — you, your team and your organisation on the four GCSE
+  levers, out of 10, from one pass over one window, with the period named. Your
+  team is your department, falling back to the people who share your manager.
+  It is **withheld entirely below five peers**: with two people in a team, the
+  team average and your own figure give the other person's exact number. When it
+  is withheld the endpoint **states** which applies — `team_state` is `shown`,
+  `too_small` or `unknown` — rather than the page inferring it from a peer count
+  of zero. A department of one and a record with no department at all both hold
+  no peers, and telling the first person "we don't know which team you're in" is
+  a false statement about their own data; it also points an administrator at the
+  wrong problem, since the fixable case is the unpopulated department. The
+  department name is still returned when the figure is withheld — the label is
+  not the disclosure.
+- **The same floor applies to the organisation.** The rule exists because a mean
+  plus the viewer's own figure gives an individual away, and that arithmetic does
+  not care whether the group is called a team or a tenant: in a four-person pilot
+  the "Organisation" bar is exactly as revealing as a team of four. Below the
+  floor the viewer sees their own figures and nothing else, and the percentile
+  goes with it.
+- **Scan history**, under Administration — every collection and analysis run with
+  its kind, duration, what it wrote and whether it succeeded, a failed run showing
+  its error, and status as shape plus word (● ◐ ○). This is what `job_runs` has
+  recorded since the first release and nothing ever displayed. Seven job kinds are
+  labelled, three of them this repo's own (the Azure OpenAI analysis pass), and an
+  unrecognised kind renders as its raw value rather than being filtered out.
+- **A daily timeline** on the personal page: prompts per day with a seven-day
+  trailing average, filling days with no activity rather than skipping them.
+- `GET /metrics/me/daily`, scoped from the token — a separate route rather than a
+  parameter on `/metrics/daily`, which three other pages read.
+- `GET /admin/scan-history`.
+
+#### Changed
+
+- **The lever percentile is shown as a band** ("in the upper half of the
+  organisation") rather than an exact figure. A lever average out of 10 has
+  nothing like the spread of a count: on the seeded directory, two people whose
+  averages both display as 4.8 land on the 38th and the 43rd percentile, because
+  with 21 other people every rank step is worth about five points. The exact
+  number stays in the API payload. It is measured against the organisation, never
+  the team — a team-relative percentile in a team of four says more about the size
+  of the team than about the person.
+- **Demo data exercises all of this.** Ten more named colleagues, so Operations
+  and Finance clear the five-peer line while Marketing, People, Technology and
+  Legal deliberately stay under it; activity spread over every persona rather than
+  "the first twelve", which stopped covering the directory once it grew; a
+  fortnight of collection and analysis runs including a failure and a run still in
+  progress; and 140 conversations by default rather than 40.
+
+### Suite consistency pass — the first pass
+
 Suite consistency pass — the four Copilot reporting solutions share one
 architecture, and this brings Prompt Analyser back into line with its siblings.
 Spec: [`docs/specs/suite-consistency-pass.md`](docs/specs/suite-consistency-pass.md).
 
-### Fixed
+#### Fixed
 
 - **A fresh image could not start.** SQLAlchemy 2.x only pulls in greenlet via its
   `[asyncio]` extra, and both the dependency list in `pyproject.toml` and the
@@ -31,7 +97,7 @@ Spec: [`docs/specs/suite-consistency-pass.md`](docs/specs/suite-consistency-pass
   were routed but linked from nowhere.
 - KPI tiles rendered a grid row ragged when only some tiles had a subtitle.
 
-### Added
+#### Added
 
 - **Administrators by Entra group.** An optional admin group object ID in Settings
   grants administrator rights to its members when they sign in with Entra, so
@@ -53,7 +119,7 @@ Spec: [`docs/specs/suite-consistency-pass.md`](docs/specs/suite-consistency-pass
   does not — active days, prompts per conversation, how the person's quality compares
   with the organisation's, and how many of their prompts were their own words.
 
-### Changed
+#### Changed
 
 - **Copilot licences are detected rather than configured.** Anyone holding a SKU that
   contains the *Microsoft Copilot with Graph-grounded chat* service plan
@@ -70,7 +136,7 @@ Spec: [`docs/specs/suite-consistency-pass.md`](docs/specs/suite-consistency-pass
 - `DataTable` gained an opt-in per-column filter row; `ChartCard` gained an optional
   header action. Both match the shared components in the sibling solutions.
 
-### Notes for existing deployments
+#### Notes for existing deployments
 
 - Three migrations, all additive: `0004_admin_group`, `0005_copilot_sku_autodetect`
   and `0006_demo_persona`. The middle one clears `copilot_sku_ids` **only** where it

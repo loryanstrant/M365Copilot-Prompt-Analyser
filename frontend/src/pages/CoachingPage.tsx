@@ -14,16 +14,15 @@ import {
 } from "recharts";
 import { api } from "../api/client";
 import type { ConversationRow, PersonalCoaching, Person } from "../api/types";
-import ChartCard from "../components/ChartCard";
-import ChartTooltip from "../components/ChartTooltip";
 import ConversationDrawer from "../components/ConversationDrawer";
 import DataTable, { type Column } from "../components/DataTable";
 import EmptyState from "../components/EmptyState";
 import GovBadge from "../components/GovBadge";
 import KpiCard from "../components/KpiCard";
+import PeerComparison from "../components/PeerComparison";
 import ScoreBadge from "../components/ScoreBadge";
 import { CHART_COLORS } from "../components/chartTheme";
-import { gcseToArray, pctSmart, score10, titleCase } from "../lib/format";
+import { pctSmart, score10, titleCase } from "../lib/format";
 
 // Conversation columns for the person's own list — same as the Conversations
 // page but without the redundant User column (everything is one person).
@@ -143,16 +142,6 @@ export default function CoachingPage() {
     };
   }, [userId]);
 
-  const chartData = useMemo(() => {
-    const mine = gcseToArray(coaching?.gcse_mine ?? null);
-    const team = gcseToArray(coaching?.gcse_team ?? null);
-    return mine.map((m, i) => ({
-      lever: m.lever,
-      mine: m.value ?? 0,
-      team: team[i]?.value ?? 0,
-    }));
-  }, [coaching]);
-
   const hasPeople = people.length > 0;
 
   return (
@@ -216,18 +205,9 @@ export default function CoachingPage() {
             </div>
           </div>
 
-          <ChartCard title="GCSE vs team" subtitle="Your levers compared with the team average">
-            <ResponsiveContainer width="100%" height={300}>
-              <BarChart data={chartData} margin={{ left: -20, right: 8, top: 8 }} barGap={4}>
-                <XAxis dataKey="lever" tick={{ fontSize: 12 }} stroke="#94a3b8" />
-                <YAxis tick={{ fontSize: 11 }} stroke="#94a3b8" domain={[0, 10]} />
-                <Tooltip content={<ChartTooltip />} cursor={{ fill: "rgba(148,163,184,0.12)" }} />
-                <Legend />
-                <Bar dataKey="mine" name="This person" fill={CHART_COLORS[0]} radius={[4, 4, 0, 0]} />
-                <Bar dataKey="team" name="Team average" fill={CHART_COLORS[2]} radius={[4, 4, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
-          </ChartCard>
+          {coaching.comparison && (
+            <PeerComparison data={coaching.comparison} perspective="other" />
+          )}
 
           <div className="card overflow-hidden">
             <div className="border-b border-slate-100 px-5 py-4 dark:border-slate-700">

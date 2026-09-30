@@ -137,6 +137,48 @@ export interface Gcse {
   expectation: number | null;
 }
 
+/**
+ * How one person compares on the levers (part of GET /metrics/me/coaching).
+ *
+ * A series is null when the server withholds it, and the matching ``*_state``
+ * says why. Never inferred from a zero: a department of one and a record with no
+ * department at all both hold no peers, and they are different facts.
+ */
+export interface PeerComparisonData {
+  mine: Gcse;
+  team: Gcse | null;
+  team_label: string | null;
+  team_size: number;
+  /** Why the team series is or is not drawn. Stated, never inferred. */
+  team_state: "shown" | "too_small" | "unknown";
+  /** The disclosure floor, owned and enforced by the server. */
+  min_team_peers: number;
+  /** Null when the whole population is small enough to identify someone. */
+  organisation: Gcse | null;
+  organisation_size: number;
+  organisation_state: "shown" | "too_small";
+  percentile: Partial<Record<keyof Gcse, number | null>>;
+  /** The band the UI shows: an exact percentile over a 1-10 average is false precision. */
+  percentile_band: Partial<Record<keyof Gcse, string | null>>;
+  period_from: string | null;
+  period_to: string | null;
+}
+
+/** One run of a collection or analysis job (GET /admin/scan-history). */
+export interface ScanRun {
+  id: number;
+  /** Readable label, or the raw job_name when the kind is unrecognised. */
+  kind: string;
+  raw_kind: string;
+  state: "succeeded" | "running" | "failed" | "cancelled" | string;
+  raw_status: string;
+  started_at: string | null;
+  finished_at: string | null;
+  duration_seconds: number | null;
+  error: string | null;
+  stats: Record<string, unknown>;
+}
+
 export interface MetricsSummary {
   prompts: number;
   conversations: number;
@@ -371,7 +413,11 @@ export interface PersonalCoaching {
   user_generated_prompts: number;
   user_generated_pct: number;
   gcse_mine: Gcse;
-  gcse_team: Gcse;
+  /**
+   * You, your team and the organisation on the levers. Replaced ``gcse_team``,
+   * which was the whole tenant's average under a "Team average" label.
+   */
+  comparison: PeerComparisonData;
   weakest_lever: string | null;
   strongest_lever: string | null;
 }

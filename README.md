@@ -59,10 +59,23 @@ filtered, so "who holds a licence and has never used it" is a two-click question
 Each person's own view: their prompts, conversations, average quality against the
 organisation's, and how much of what they send is their own words — each with a
 subtitle that says what the number means rather than repeating its label. Plus a
-focus-area callout, their GCSE levers against the team's, and their own
-conversations.
+focus-area callout, **How you compare** — their GCSE levers against their own team
+and the whole organisation, out of 10 — a daily timeline of their prompts with a
+seven-day trailing average, and their own conversations.
+
+A team average is only ever shown when the team holds at least five people other
+than the viewer. Below that it is left out and the chart says so: with two people
+in a team, the team average and your own figure give the other person's exact
+number.
 
 ![Your coaching](docs/screenshots/personal-coaching.png)
+
+### Scan history
+Every collection and analysis run, newest first — what kind it was, when it
+started, how long it took, what it wrote, and whether it succeeded, with a failed
+run showing its error. Status is a shape plus a word (● ◐ ○), never colour alone.
+
+![Scan history](docs/screenshots/scan-history.png)
 
 ### Usage breakdown & dark mode
 Per-app and per-intent volume and average quality, category mix, and GCSE-by-intent.
@@ -185,9 +198,9 @@ fictional person's prompts can never end up presented as yours beside live tenan
 
 ### Where to find run history, logs, and errors
 
-- **In the app:** **Settings → Data status** (last run + counts) and **Settings → Historical
-  backfill** (per-run history table with prompts/lookback/status). A failed run shows its error
-  message in the run's stats.
+- **In the app:** **Scan history** (every collection and analysis run, newest first, with what it
+  wrote and why it failed), **Settings → Data status** (last run + counts) and **Historical
+  backfill** (per-run history with prompts/lookback/status).
 - **Container logs (the real detail):** manual **Refresh now**, **Backfill** and **Run analysis**
   run inside the **`…-api-…`** Container App, so their logs live there — open it → **Monitoring →
   Log stream** (live), or **Logs** to query `ContainerAppConsoleLogs_CL`. The scheduled background
@@ -225,6 +238,17 @@ A desktop web dashboard — there is no mobile layout.
 - **Your coaching** — every signed-in colleague gets their own coaching view (their prompts,
   quality against the organisation's, and GCSE levers), with the organisation-wide reports gated
   separately. See [Your coaching vs. the organisation view](#your-coaching-vs-the-organisation-view).
+- **How you compare** — your levers against **your team** and **your organisation**, out of 10,
+  over one named period. Your team is your department, falling back to the people who share your
+  manager. It is withheld entirely when that group holds fewer than five people besides you, and
+  the chart says which applies — "too small to show" or "we don't know which team you're in".
+  Aggregates only: no individual's figures are ever exposed.
+- **Your prompts over time** — a daily timeline with a seven-day trailing average, filling days
+  with no activity rather than skipping them, because a fortnight of silence is usually the
+  signal worth seeing.
+- **Scan history (admin)** — every collection and analysis run with its kind, duration, what it
+  wrote and whether it succeeded; a failed run shows its error. This is what `job_runs` has
+  recorded since the first release and nothing ever displayed.
 - **People coaching (organisation)** — pick anyone and see the coaching view they would get.
 - **Settings (admin)** — Graph and Azure OpenAI config (secrets write-only, Fernet-encrypted),
   a guided app-registration wizard, test connection, run now, demo data, and a resumable

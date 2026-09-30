@@ -324,6 +324,21 @@ async def get_my_coaching(
     return await metrics.personal(session, await _me_user_id(user, session))
 
 
+@me_router.get("/daily")
+async def get_my_daily(
+    user: CurrentUser = Depends(get_current_user),
+    f: PromptFilter = Depends(get_filters),
+    session: AsyncSession = Depends(get_session),
+):
+    """This person's prompts per day, for the personal timeline.
+
+    A separate route rather than a parameter on ``/metrics/daily``: three other
+    pages read that one, and this must be scoped from the token, never from a
+    user id in the URL.
+    """
+    return await metrics.daily(session, f=await _me_filters(user, f, session))
+
+
 @me_router.get("/summary")
 async def get_my_summary(
     user: CurrentUser = Depends(get_current_user),

@@ -26,15 +26,16 @@ import argparse
 import asyncio
 import random
 import sys
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta, timezone
 
-from sqlalchemy import delete
+from sqlalchemy import delete, select
 
 from shared.db import SessionLocal
 from shared.models import (
     AppConfig,
     ConversationAnalysis,
     EntraUser,
+    JobRun,
     LicensedUser,
     Prompt,
     PromptAnalysis,
@@ -124,6 +125,26 @@ _PERSONAS: list[tuple[str, str, str, str, str, str, str | None]] = [
     ("user-11", "Jo Whitcombe", "Solution Architect", "Technology", "Melbourne", "Australia", "user-10"),
     ("user-12", "Rhiannon Pryce", "Legal Counsel", "Legal", "Cardiff", "United Kingdom", "user-00"),
     ("user-13", "Ben Osei", "Procurement Specialist", "Finance", "Manchester", "United Kingdom", "user-01"),
+    # Added so two departments are actually big enough to compare against.
+    # "How you compare" withholds a team average below five people other than
+    # the viewer, because at smaller sizes the team mean plus the viewer's own
+    # figure gives an individual away. With only the fourteen personas above,
+    # the biggest department held four active people, so the comparison the demo
+    # exists to show was withheld for everyone who looked at it.
+    #
+    # Operations and Finance are deliberately over the line and Marketing,
+    # Technology, People and Legal deliberately under it: the withheld state is
+    # part of what a demo should show, not a bug to seed around.
+    ("user-14", "Yusuf Demir", "Operations Analyst", "Operations", "Wellington", "New Zealand", "user-02"),
+    ("user-15", "Carys Llewellyn", "Process Improvement Lead", "Operations", "Melbourne", "Australia", "user-02"),
+    ("user-16", "Thabo Molefe", "Service Delivery Manager", "Operations", "Brisbane", "Australia", "user-05"),
+    ("user-17", "Ingrid Sørensen", "Logistics Coordinator", "Operations", "Wellington", "New Zealand", "user-05"),
+    ("user-18", "Lucia Ferrari", "Commercial Analyst", "Finance", "Sydney", "Australia", "user-01"),
+    ("user-19", "Owen Tibbett", "Payroll Manager", "Finance", "Manchester", "United Kingdom", "user-01"),
+    ("user-20", "Anjali Kapoor", "Treasury Analyst", "Finance", "Melbourne", "Australia", "user-03"),
+    ("user-21", "Mateo Silva", "Campaign Manager", "Marketing", "Brisbane", "Australia", "user-07"),
+    ("user-22", "Fiona Achebe", "Talent Acquisition Lead", "People", "Dublin", "Ireland", "user-09"),
+    ("user-23", "Petr Novak", "Platform Engineer", "Technology", "Melbourne", "Australia", "user-10"),
 ]
 
 # Everyone except two — a directory with universal licensing tells a tenant
@@ -135,9 +156,17 @@ _UNLICENSED = {"user-08", "user-09"}
 # a manager, a team around them and a middling amount of activity.
 DEMO_PERSONA_USER_ID = "user-02"
 
-# How many of the personas the prompt generator spreads activity across. The
-# rest are directory-only, deliberately.
-_ACTIVE_PERSONAS = 12
+# The personas the prompt generator deliberately leaves alone: they hold a
+# licence and have no activity at all, which is the row a tenant most wants to
+# find on the Tenant users listing and would never appear if everybody here had
+# prompts. Everyone else is active — selecting "the first twelve" stopped working
+# once the directory grew past twelve, because the people who make the team
+# comparisons possible would have had no prompts to compare.
+_INACTIVE_PERSONAS = {"user-12", "user-13"}
+
+
+def _active_persona_ids() -> list[str]:
+    return [uid for uid, *_ in _PERSONAS if uid not in _INACTIVE_PERSONAS]
 
 
 def _persona_rows() -> list[dict[str, object]]:
@@ -173,6 +202,10 @@ _SKILL: dict[str, int] = {
     "user-00": 2, "user-01": 1, "user-02": 0, "user-03": 3, "user-04": -1,
     "user-05": 1, "user-06": -3, "user-07": 2, "user-08": -2, "user-09": 0,
     "user-10": 1, "user-11": -3,
+    # The later personas spread either side of the middle, so a team average is
+    # not simply the viewer's own figure repeated.
+    "user-14": -2, "user-15": 2, "user-16": 0, "user-17": -1, "user-18": 3,
+    "user-19": -2, "user-20": 1, "user-21": -1, "user-22": 0, "user-23": 2,
 }
 
 # One lever is the organisation's weakest, so the briefing has something to say
@@ -193,6 +226,141 @@ def _rand_gcse(skill: int) -> dict[str, int]:
     }
 
 
+# Marks a job_runs row as demo data, so clearing the demo removes exactly these
+# rows and never a record of something that really ran.
+_DEMO_RUN_MARK = "demo"
+
+
+async def _delete_demo_job_runs(session) -> None:
+    """Remove only the seeded runs, never a record of something that really ran.
+
+    Matched in Python on the marker in ``stats`` rather than with a JSON
+    containment operator, because this script has to work on SQLite as well as
+    Postgres and the syntax for that differs between them.
+    """
+    rows = (await session.execute(select(JobRun))).scalars().all()
+    for row in rows:
+        if isinstance(row.stats, dict) and row.stats.get(_DEMO_RUN_MARK):
+            await session.delete(row)
+
+
+async def _seed_job_runs(session, today: date) -> int:
+    """A fortnight of collection and analysis runs for Scan history.
+
+    Including a failure and a run still in progress. A log where everything
+    always succeeded teaches nobody what a failure looks like, and until this
+    existed the in-progress indicator was mapped but had never been rendered
+    anywhere.
+    """
+    # The day the nightly collection broke, far enough back that it is not the
+    # newest row — a failure at the top of the list is easy; one buried in the
+    # middle is what people actually have to spot.
+    failed_day = 9
+    runs: list[JobRun] = []
+
+    def at(days_ago: int, hour: int, minute: int = 0) -> datetime:
+        d = today - timedelta(days=days_ago)
+        return datetime(d.year, d.month, d.day, hour, minute, tzinfo=timezone.utc)
+
+    for days_ago in range(13, -1, -1):
+        started = at(days_ago, 2)
+        if days_ago == failed_day:
+            runs.append(
+                JobRun(
+                    job_name="scheduled",
+                    started_at=started,
+                    finished_at=started + timedelta(seconds=42),
+                    status="failed",
+                    stats={
+                        _DEMO_RUN_MARK: True,
+                        "error": (
+                            "Microsoft Graph returned 429 (throttled) on "
+                            "getCopilotUserInteractions; retries exhausted"
+                        ),
+                        "prompts": 0,
+                    },
+                )
+            )
+            continue
+        runs.append(
+            JobRun(
+                job_name="scheduled",
+                started_at=started,
+                finished_at=started + timedelta(minutes=3, seconds=12),
+                status="success",
+                stats={
+                    _DEMO_RUN_MARK: True,
+                    "prompts": random.randint(60, 240),
+                    "entra_users": len(_PERSONAS),
+                    "licensed_users": len(_PERSONAS) - len(_UNLICENSED),
+                    "copilot_skus": 2,
+                },
+            )
+        )
+        analysis_started = started + timedelta(minutes=10)
+        runs.append(
+            JobRun(
+                job_name="scheduled-analysis",
+                started_at=analysis_started,
+                finished_at=analysis_started + timedelta(minutes=6, seconds=40),
+                status="success",
+                stats={
+                    _DEMO_RUN_MARK: True,
+                    "prompts": random.randint(50, 200),
+                    "conversations": random.randint(8, 30),
+                    "errors": 0,
+                },
+            )
+        )
+
+    # One historical backfill, which is where the older prompts came from. It
+    # writes "completed" rather than "success" — the same outcome under a
+    # different word, because a different module wrote the row.
+    backfill_started = at(12, 21)
+    runs.append(
+        JobRun(
+            job_name="backfill",
+            started_at=backfill_started,
+            finished_at=backfill_started + timedelta(hours=1, minutes=48),
+            status="completed",
+            stats={
+                _DEMO_RUN_MARK: True,
+                "users": len(_PERSONAS),
+                "prompts": 1840,
+                "lookback_days": 90,
+                "cancelled": False,
+            },
+        )
+    )
+
+    # Somebody pressing Run now, and an analysis pass still going. The running
+    # row has no finished_at, which is what makes the duration column show a dash
+    # and the status show as in progress.
+    manual_started = at(3, 14, 35)
+    runs.append(
+        JobRun(
+            job_name="manual",
+            started_at=manual_started,
+            finished_at=manual_started + timedelta(minutes=2, seconds=51),
+            status="success",
+            stats={_DEMO_RUN_MARK: True, "prompts": 74, "entra_users": len(_PERSONAS)},
+        )
+    )
+    runs.append(
+        JobRun(
+            job_name="manual-analysis",
+            started_at=datetime.now(timezone.utc) - timedelta(minutes=4),
+            finished_at=None,
+            status="running",
+            stats={_DEMO_RUN_MARK: True, "prompts": 31, "conversations": 6},
+        )
+    )
+
+    for r in runs:
+        session.add(r)
+    return len(runs)
+
+
 async def seed(conversations: int, reset: bool) -> dict[str, int]:
     async with SessionLocal() as session:
         if reset:
@@ -201,6 +369,7 @@ async def seed(conversations: int, reset: bool) -> dict[str, int]:
             await session.execute(delete(Prompt))
             await session.execute(delete(EntraUser))
             await session.execute(delete(LicensedUser))
+            await _delete_demo_job_runs(session)
             await session.commit()
 
         for row in _persona_rows():
@@ -220,6 +389,7 @@ async def seed(conversations: int, reset: bool) -> dict[str, int]:
         cfg.demo_persona_user_id = DEMO_PERSONA_USER_ID
 
         today = date.today()
+        active_ids = _active_persona_ids()
         n_prompts = 0
         for c in range(conversations):
             conv_id = f"demo-conv-{c:04d}"
@@ -227,7 +397,7 @@ async def seed(conversations: int, reset: bool) -> dict[str, int]:
             cat = random.choice(CATEGORIES)
             day = today - timedelta(days=random.randint(0, 89))
             n = random.randint(1, 6)
-            user_id = f"user-{c % _ACTIVE_PERSONAS:02d}"
+            user_id = active_ids[c % len(active_ids)]
             skill = _SKILL.get(user_id, 0)
             scores: list[int] = []
             user_gen = 0
@@ -316,11 +486,13 @@ async def seed(conversations: int, reset: bool) -> dict[str, int]:
                     prompt_count=n,
                 )
             )
+        job_runs = await _seed_job_runs(session, today)
         await session.commit()
     return {
         "conversations": conversations,
         "prompts": n_prompts,
         "users": len(_PERSONAS),
+        "job_runs": job_runs,
     }
 
 
@@ -337,6 +509,7 @@ async def clear() -> dict[str, int]:
         await session.execute(delete(Prompt))
         await session.execute(delete(EntraUser))
         await session.execute(delete(LicensedUser))
+        await _delete_demo_job_runs(session)
         cfg = await session.get(AppConfig, 1)
         if cfg is not None:
             cfg.demo_persona_user_id = None
@@ -346,7 +519,10 @@ async def clear() -> dict[str, int]:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Seed demo prompt-analysis data.")
-    parser.add_argument("--conversations", type=int, default=40)
+    # 140, not 40: the directory is 22 active people now, and at 40
+    # conversations most of them had one or two, which is too thin for a team
+    # average to mean anything.
+    parser.add_argument("--conversations", type=int, default=140)
     parser.add_argument("--reset", action="store_true")
     parser.add_argument("--clear", action="store_true", help="Clear data and exit")
     args = parser.parse_args()
@@ -360,7 +536,8 @@ def main() -> None:
     stats = asyncio.run(seed(args.conversations, args.reset))
     print(
         f"Seeded {stats['prompts']} prompts across {stats['conversations']} "
-        f"conversations for {stats['users']} directory users."
+        f"conversations for {stats['users']} directory users, "
+        f"and {stats['job_runs']} collection runs."
     )
 
 
