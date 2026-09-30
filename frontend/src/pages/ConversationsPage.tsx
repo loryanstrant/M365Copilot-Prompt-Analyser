@@ -114,7 +114,7 @@ export default function ConversationsPage() {
           initialSort={{ key: "conversation", dir: "desc" }}
           emptyMessage="No conversations for this selection."
           columns={columns}
-          maxBodyHeight={520}
+          maxBodyHeight="max(240px, calc(100vh - 20rem))"
           rowClassName={(r) =>
             `cursor-pointer transition-colors hover:bg-slate-50 dark:hover:bg-slate-700/40 ${
               r.conversation_id === selected ? "bg-brand-50 dark:bg-brand-900/20" : ""

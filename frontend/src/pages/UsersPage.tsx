@@ -137,7 +137,7 @@ export default function UsersPage() {
           // A directory is long enough that the filter boxes would scroll off
           // the top, which is the difference between the filter row working and
           // being a decoration.
-          maxBodyHeight={520}
+          maxBodyHeight="max(240px, calc(100vh - 20rem))"
           emptyMessage="No users imported yet. Configure the app registration in Settings, then run a collection."
         />
       </ChartCard>

@@ -212,7 +212,7 @@ export default function CoachingPage() {
           <div className="card overflow-hidden">
             <div className="border-b border-slate-100 px-5 py-4 dark:border-slate-700">
               <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-200">
-                Your conversations
+                {coaching.name}&rsquo;s conversations
               </h3>
             </div>
             <DataTable
@@ -221,7 +221,7 @@ export default function CoachingPage() {
               initialSort={{ key: "conversation", dir: "desc" }}
               emptyMessage="No conversations for this person."
               columns={convColumns}
-              maxBodyHeight={420}
+              maxBodyHeight="max(240px, calc(100vh - 24rem))"
               rowClassName={(r) =>
                 `cursor-pointer transition-colors hover:bg-slate-50 dark:hover:bg-slate-700/40 ${
                   r.conversation_id === selectedConv ? "bg-brand-50 dark:bg-brand-900/20" : ""
