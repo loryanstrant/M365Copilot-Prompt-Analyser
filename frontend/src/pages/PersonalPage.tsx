@@ -5,29 +5,21 @@
 // the page could name a user, anyone could read anyone else's prompts by
 // editing the address bar. Picking a person is an organisation activity and
 // lives on CoachingPage, behind the organisation-view gate.
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import {
-  Bar,
-  BarChart,
-  Legend,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from "recharts";
 import { api } from "../api/client";
-import type { ConversationRow, PersonalCoaching } from "../api/types";
+import type { ConversationRow, DailyPoint, PersonalCoaching } from "../api/types";
 import { useAuth } from "../auth/AuthContext";
+import ActivityTimeline from "../components/ActivityTimeline";
 import ChartCard from "../components/ChartCard";
-import ChartTooltip from "../components/ChartTooltip";
 import ConversationDrawer from "../components/ConversationDrawer";
 import DataTable, { type Column } from "../components/DataTable";
 import GovBadge from "../components/GovBadge";
 import KpiCard from "../components/KpiCard";
+import PeerComparison from "../components/PeerComparison";
 import ScoreBadge from "../components/ScoreBadge";
 import { CHART_COLORS } from "../components/chartTheme";
-import { gcseToArray, pctSmart, score10, titleCase } from "../lib/format";
+import { pctSmart, score10, titleCase } from "../lib/format";
 
 // No "User" column: every row here belongs to the person reading the page.
 const convColumns: Column<ConversationRow>[] = [
@@ -145,6 +137,7 @@ export default function PersonalPage() {
   const { user } = useAuth();
   const [coaching, setCoaching] = useState<PersonalCoaching | null>(null);
   const [conversations, setConversations] = useState<ConversationRow[]>([]);
+  const [daily, setDaily] = useState<DailyPoint[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [selectedConv, setSelectedConv] = useState<string | null>(null);
@@ -155,13 +148,17 @@ export default function PersonalPage() {
       setLoading(true);
       setError(null);
       try {
-        const [c, convs] = await Promise.all([
+        const [c, convs, days] = await Promise.all([
           api<PersonalCoaching>("/metrics/me/coaching"),
           api<ConversationRow[]>("/metrics/me/conversations?limit=1000"),
+          // /metrics/me/daily, not /metrics/daily: the personal view is scoped
+          // from the token and never from a user id in the URL.
+          api<DailyPoint[]>("/metrics/me/daily"),
         ]);
         if (!cancelled) {
           setCoaching(c);
           setConversations(convs);
+          setDaily(days);
         }
       } catch {
         if (!cancelled) {
@@ -177,16 +174,6 @@ export default function PersonalPage() {
       cancelled = true;
     };
   }, []);
-
-  const chartData = useMemo(() => {
-    const mine = gcseToArray(coaching?.gcse_mine ?? null);
-    const team = gcseToArray(coaching?.gcse_team ?? null);
-    return mine.map((m, i) => ({
-      lever: m.lever,
-      mine: m.value ?? 0,
-      team: team[i]?.value ?? 0,
-    }));
-  }, [coaching]);
 
   const hasData = (coaching?.prompts ?? 0) > 0;
 
@@ -280,20 +267,17 @@ export default function PersonalPage() {
             </div>
           </div>
 
+          {coaching.comparison && <PeerComparison data={coaching.comparison} />}
+
           <ChartCard
-            title="GCSE vs team"
-            subtitle="Your levers compared with the team average"
+            title="Your prompts over time"
+            subtitle="Per day, with a seven-day trailing average"
           >
-            <ResponsiveContainer width="100%" height={300}>
-              <BarChart data={chartData} margin={{ left: -20, right: 8, top: 8 }} barGap={4}>
-                <XAxis dataKey="lever" tick={{ fontSize: 12 }} stroke="#94a3b8" />
-                <YAxis tick={{ fontSize: 11 }} stroke="#94a3b8" domain={[0, 10]} />
-                <Tooltip content={<ChartTooltip />} cursor={{ fill: "rgba(148,163,184,0.12)" }} />
-                <Legend />
-                <Bar dataKey="mine" name="You" fill={CHART_COLORS[0]} radius={[4, 4, 0, 0]} />
-                <Bar dataKey="team" name="Team average" fill={CHART_COLORS[2]} radius={[4, 4, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
+            <ActivityTimeline
+              points={daily}
+              series={[{ key: "prompts", label: "Prompts", color: CHART_COLORS[0] }]}
+              height={240}
+            />
           </ChartCard>
 
           <div className="card overflow-hidden">
