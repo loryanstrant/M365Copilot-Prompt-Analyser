@@ -75,10 +75,7 @@ Every collection and analysis run, newest first — what kind it was, when it
 started, how long it took, what it wrote, and whether it succeeded, with a failed
 run showing its error. Status is a shape plus a word (● ◐ ○), never colour alone.
 
-<!-- Screenshot pending: docs/screenshots/scan-history.png (light and dark).
-     Capture per docs/screenshots/README.md and restore the image line below.
 ![Scan history](docs/screenshots/scan-history.png)
--->
 
 ### Usage breakdown & dark mode
 Per-app and per-intent volume and average quality, category mix, and GCSE-by-intent.
@@ -87,8 +84,7 @@ Every page supports a light and dark theme.
 ![Usage breakdown](docs/screenshots/usage-breakdown.png)
 ![Overview in dark mode](docs/screenshots/executive-summary-dark.png)
 
-Every screenshot here exists in both themes, apart from Scan history which is
-still to be captured; see
+Every screenshot here exists in both themes; see
 [`docs/screenshots/README.md`](docs/screenshots/README.md) for how they are produced.
 
 
