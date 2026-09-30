@@ -154,6 +154,8 @@ export interface PeerComparisonData {
   organisation: Gcse;
   organisation_size: number;
   percentile: Partial<Record<keyof Gcse, number | null>>;
+  /** The band the UI shows: an exact percentile over a 1-10 average is false precision. */
+  percentile_band: Partial<Record<keyof Gcse, string | null>>;
   period_from: string | null;
   period_to: string | null;
 }

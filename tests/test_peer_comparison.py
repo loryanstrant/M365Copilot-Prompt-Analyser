@@ -256,3 +256,48 @@ async def test_users_filter_does_not_shrink_the_organisation(session) -> None:
     )
     assert result["organisation_size"] == 5
     assert result["team"] is not None
+
+
+@pytest.mark.asyncio
+async def test_the_band_is_what_the_lever_scale_can_support(session) -> None:
+    """A band as well as the exact percentile, and the band is what the UI shows.
+
+    A lever average out of 10 has nothing like the spread of a prompt count, so
+    an exact percentile over it claims precision the figure has not got: on the
+    seeded demo directory two people whose averages both display as 4.8 land on
+    the 38th and the 43rd percentile, purely because with 21 other people every
+    rank step is worth about five points.
+    """
+    _add_person(session, "me", department="Eng")
+    for i in range(6):
+        _add_person(session, f"peer{i}", department="Eng")
+    _add_prompt(session, "p-me", "me", goal=5, context=5, source=5, expectation=5)
+    for i in range(6):
+        _add_prompt(
+            session,
+            f"p-peer{i}",
+            f"peer{i}",
+            goal=4 + i % 3,
+            context=4 + i % 3,
+            source=4 + i % 3,
+            expectation=4 + i % 3,
+        )
+    await session.commit()
+
+    result = await metrics.peer_comparison(session, user_id="me")
+
+    for lever in metrics.GCSE_LEVERS:
+        pct = result["percentile"][lever]
+        band = result["percentile_band"][lever]
+        assert (band is None) == (pct is None)
+        if pct is not None:
+            assert band in {"top quarter", "upper half", "lower half", "bottom quarter"}
+
+    assert metrics._percentile_band(100) == "top quarter"
+    assert metrics._percentile_band(75) == "top quarter"
+    assert metrics._percentile_band(74) == "upper half"
+    assert metrics._percentile_band(50) == "upper half"
+    assert metrics._percentile_band(49) == "lower half"
+    assert metrics._percentile_band(25) == "lower half"
+    assert metrics._percentile_band(24) == "bottom quarter"
+    assert metrics._percentile_band(None) is None

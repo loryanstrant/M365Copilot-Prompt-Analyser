@@ -12,6 +12,7 @@ export interface PeerComparisonData {
   organisation: Gcse;
   organisation_size: number;
   percentile: Partial<Record<keyof Gcse, number | null>>;
+  percentile_band: Partial<Record<keyof Gcse, string | null>>;
   period_from: string | null;
   period_to: string | null;
 }
@@ -38,12 +39,6 @@ function fmtPeriod(from: string | null, to: string | null): string {
     });
   if (from && to) return `${d(from)} – ${d(to)}`;
   return from ? `since ${d(from)}` : `up to ${d(to as string)}`;
-}
-
-function ordinal(n: number): string {
-  const s = ["th", "st", "nd", "rd"];
-  const v = n % 100;
-  return `${n}${s[(v - 20) % 10] ?? s[v] ?? s[0]}`;
 }
 
 /**
@@ -94,7 +89,11 @@ export default function PeerComparison({
           const mine = data.mine?.[m.key] ?? null;
           const team = data.team ? data.team[m.key] ?? null : null;
           const org = data.organisation?.[m.key] ?? null;
-          const pct = data.percentile?.[m.key];
+          // The band rather than the exact percentile: a lever average out of 10
+          // has so little spread that two people displaying the same 4.8 land
+          // five percentile points apart, which is precision the figure has not
+          // got. The exact number is still in the payload.
+          const band = data.percentile_band?.[m.key];
           const rows: { label: string; value: number | null; bar: string }[] = [
             { label: subject, value: mine, bar: "bg-brand-600" },
             ...(data.team !== null
@@ -115,8 +114,8 @@ export default function PeerComparison({
                   {m.label}
                 </span>
                 <span className="text-xs text-slate-400 dark:text-slate-500">
-                  {pct != null
-                    ? `${ordinal(pct)} percentile across the organisation`
+                  {band
+                    ? `In the ${band} of the organisation`
                     : "not enough data to rank"}
                 </span>
               </div>

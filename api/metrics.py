@@ -1079,6 +1079,24 @@ def _percentile(value: float | None, population: list[float]) -> int | None:
     return round(100.0 * at_or_below / len(population))
 
 
+# A lever average out of 10 has nothing like the spread of a prompt count, so an
+# exact percentile over it claims precision the figure does not have: on the
+# seeded demo directory, two people whose averages both display as 4.8 (0.009
+# apart in truth) land on the 38th and 43rd percentile, because with 21 other
+# people every rank step is worth about five points. A band is what the data
+# actually supports, and it still names the population it was measured against.
+def _percentile_band(pct: int | None) -> str | None:
+    if pct is None:
+        return None
+    if pct >= 75:
+        return "top quarter"
+    if pct >= 50:
+        return "upper half"
+    if pct >= 25:
+        return "lower half"
+    return "bottom quarter"
+
+
 async def peer_comparison(
     session: AsyncSession, *, user_id: str, f: PromptFilter | None = None
 ) -> dict[str, Any]:
@@ -1151,6 +1169,17 @@ async def peer_comparison(
         return out
 
     mine = levers_of(me) if me is not None else {k: None for k in GCSE_LEVERS}
+    # Ranked on the unrounded average, against unrounded averages. Ranking a
+    # value rounded to one decimal against a population that is not rounded puts
+    # somebody on 4.84 behind everybody on 4.81, which is backwards.
+    mine_raw = {
+        lever: (
+            float(getattr(me, lever))
+            if me is not None and getattr(me, lever) is not None
+            else None
+        )
+        for lever in GCSE_LEVERS
+    }
 
     # The window every series was computed over, so the panel can name it. With
     # no date filter the honest answer is not "the selected period" — it is the
@@ -1167,6 +1196,14 @@ async def peer_comparison(
             period_from = period_from or observed[0]
             period_to = period_to or observed[1]
 
+    percentile = {
+        lever: _percentile(
+            mine_raw[lever],
+            [float(getattr(r, lever)) for r in others if getattr(r, lever) is not None],
+        )
+        for lever in GCSE_LEVERS
+    }
+
     result: dict[str, Any] = {
         "period_from": period_from.isoformat() if period_from else None,
         "period_to": period_to.isoformat() if period_to else None,
@@ -1175,16 +1212,11 @@ async def peer_comparison(
         "organisation_size": len(others),
         # Per lever, and against the organisation — stated in the UI, because a
         # percentile without its population is a number pretending to be a fact.
-        "percentile": {
-            lever: _percentile(
-                mine[lever],
-                [
-                    float(getattr(r, lever))
-                    for r in others
-                    if getattr(r, lever) is not None
-                ],
-            )
-            for lever in GCSE_LEVERS
+        # Kept in the payload because it is the honest underlying number; the UI
+        # shows the band, which is the precision it can defend.
+        "percentile": percentile,
+        "percentile_band": {
+            lever: _percentile_band(percentile[lever]) for lever in GCSE_LEVERS
         },
         "team": None,
         "team_label": None,
