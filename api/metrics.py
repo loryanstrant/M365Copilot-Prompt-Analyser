@@ -14,7 +14,7 @@ sensitive info / profanity) and a quality-score range.
 """
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import date, timedelta
 from typing import Any
 
@@ -22,7 +22,13 @@ from sqlalchemy import Integer, and_, cast, distinct, func, or_, select
 from sqlalchemy.orm import aliased
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from shared.models import ConversationAnalysis, EntraUser, Prompt, PromptAnalysis
+from shared.models import (
+    ConversationAnalysis,
+    EntraUser,
+    JobRun,
+    Prompt,
+    PromptAnalysis,
+)
 
 GCSE_LEVERS = ("goal", "context", "source", "expectation")
 _HIGH_QUALITY = 7
@@ -154,6 +160,86 @@ def _base(f: PromptFilter):
     if conds:
         q = q.where(and_(*conds))
     return q.subquery()
+
+
+# --- scan history --------------------------------------------------------
+#
+# ``job_runs.job_name`` is not a tidy enum, and the set differs per repo. These
+# seven are what *this* code writes: ``daily`` (the ingest default),
+# ``scheduled`` and ``manual`` for collections, ``analysis`` /
+# ``scheduled-analysis`` / ``manual-analysis`` for the analysis pass nobody else
+# in the suite has, and ``backfill``. The rest are the siblings' values, carried
+# so a row written under another schema still reads.
+#
+# An unrecognised kind is shown as its raw value rather than filtered out: a run
+# that happened and is not listed is worse than one labelled awkwardly. See
+# docs/specs/comparisons-and-timelines.md.
+JOB_KIND_LABELS = {
+    # This app's own
+    "daily": "Scheduled collection",
+    "scheduled": "Scheduled collection",
+    "manual": "Manual collection",
+    "analysis": "Analysis",
+    "scheduled-analysis": "Scheduled analysis",
+    "manual-analysis": "Manual analysis",
+    "backfill": "Historical backfill",
+    # The siblings', so their rows read if a database is ever shared
+    "users": "User sync",
+    "csv-cowork-usage": "Cowork usage import",
+    "csv-credit-consumption": "Credit consumption import",
+}
+
+# Six status values exist across the suite, and ``success`` and ``completed``
+# mean the same thing — they differ only by which module wrote the row. The
+# display layer absorbs that; this is the one place the mapping is decided.
+JOB_STATUS_STATE = {
+    "success": "succeeded",
+    "completed": "succeeded",
+    "running": "running",
+    "preparing": "running",
+    "failed": "failed",
+    "cancelled": "cancelled",
+}
+
+
+async def scan_history(
+    session: AsyncSession, *, limit: int = 100
+) -> list[dict[str, Any]]:
+    """Every collection and analysis run, newest first.
+
+    ``job_runs`` has recorded this since the first release and nothing ever
+    displayed it, so "did last night's pull actually work?" had no answer in
+    the UI.
+    """
+    rows = (
+        await session.execute(
+            select(JobRun).order_by(JobRun.started_at.desc()).limit(limit)
+        )
+    ).scalars().all()
+
+    out: list[dict[str, Any]] = []
+    for r in rows:
+        stats = r.stats if isinstance(r.stats, dict) else {}
+        duration = None
+        if r.started_at and r.finished_at:
+            duration = max(0, int((r.finished_at - r.started_at).total_seconds()))
+        out.append(
+            {
+                "id": r.id,
+                "kind": JOB_KIND_LABELS.get(r.job_name, r.job_name),
+                "raw_kind": r.job_name,
+                "state": JOB_STATUS_STATE.get(r.status, r.status),
+                "raw_status": r.status,
+                "started_at": r.started_at.isoformat() if r.started_at else None,
+                "finished_at": r.finished_at.isoformat() if r.finished_at else None,
+                "duration_seconds": duration,
+                # The error lives in stats on a failed run; surfacing it is the
+                # difference between a log people can act on and one they cannot.
+                "error": stats.get("error"),
+                "stats": {k: v for k, v in stats.items() if k != "error"},
+            }
+        )
+    return out
 
 
 # --- filter options ------------------------------------------------------
@@ -969,9 +1055,158 @@ async def briefing(
     }
 
 
+# --- how you compare -----------------------------------------------------
+#
+# A team series is only drawn when the grouping holds at least this many people
+# besides the viewer. Below it, the team average plus the viewer's own figure
+# gives away an individual's number — at two people exactly, and at three or
+# four closely enough to matter. This is a disclosure rule, not a presentation
+# preference, so it does not vary by data source. See
+# docs/specs/comparisons-and-timelines.md.
+MIN_TEAM_PEERS = 5
+
+
+def _percentile(value: float | None, population: list[float]) -> int | None:
+    """Where ``value`` sits in ``population``, 0-100. None when nothing to rank against.
+
+    Always measured against the organisation, never the team: in a team of four
+    a team-relative percentile says more about the size of the team than about
+    the person, and the panel says which population it used.
+    """
+    if value is None or not population:
+        return None
+    at_or_below = sum(1 for v in population if v <= value)
+    return round(100.0 * at_or_below / len(population))
+
+
+async def peer_comparison(
+    session: AsyncSession, *, user_id: str, f: PromptFilter | None = None
+) -> dict[str, Any]:
+    """This person, their team and the organisation, on the four GCSE levers.
+
+    Returns aggregates only — a mean per group, never a list of people. The team
+    is the viewer's department, falling back to everyone who shares their
+    manager, and it is **omitted entirely** below :data:`MIN_TEAM_PEERS` rather
+    than drawn from a group small enough to identify somebody.
+
+    All three series come from one pass over the same filtered window, so they
+    cannot silently disagree about which period they describe. What replaced the
+    original ``avg(gcse_lever)`` with no filter at all, which was the whole
+    tenant wearing a "Team average" label.
+    """
+    f = f or PromptFilter()
+    # The viewer's own ``users`` filter must not narrow the population they are
+    # being compared against, or "the organisation" would be one person.
+    org_f = replace(f, users=[])
+    b = _base(org_f)
+
+    lever_cols = [
+        func.avg(getattr(b.c, f"gcse_{lever}")).label(lever) for lever in GCSE_LEVERS
+    ]
+    rows = (
+        await session.execute(
+            select(b.c.user_id, b.c.department, b.c.manager_id, *lever_cols).group_by(
+                b.c.user_id, b.c.department, b.c.manager_id
+            )
+        )
+    ).all()
+
+    def levers_of(row: Any) -> dict[str, float | None]:
+        return {lever: _round(getattr(row, lever)) for lever in GCSE_LEVERS}
+
+    me = next((r for r in rows if r.user_id == user_id), None)
+    others = [r for r in rows if r.user_id != user_id]
+
+    # Who counts as "my team". Department first, because that is what people
+    # mean; the manager group only as a fallback for tenants that leave
+    # department empty.
+    peers: list[Any] = []
+    team_label: str | None = None
+    grouping_known = False
+    if me is not None:
+        dept = (me.department or "").strip()
+        if dept:
+            grouping_known = True
+            peers = [r for r in others if (r.department or "").strip() == dept]
+            team_label = dept
+        if len(peers) < MIN_TEAM_PEERS and me.manager_id:
+            grouping_known = True
+            mgr_peers = [r for r in others if r.manager_id == me.manager_id]
+            if len(mgr_peers) > len(peers):
+                peers = mgr_peers
+                team_label = "your manager's team"
+
+    def mean(values: list[float]) -> float | None:
+        return _round(sum(values) / len(values)) if values else None
+
+    def group_levers(group: list[Any]) -> dict[str, float | None]:
+        out: dict[str, float | None] = {}
+        for lever in GCSE_LEVERS:
+            vals = [
+                float(getattr(r, lever))
+                for r in group
+                if getattr(r, lever) is not None
+            ]
+            out[lever] = mean(vals)
+        return out
+
+    mine = levers_of(me) if me is not None else {k: None for k in GCSE_LEVERS}
+
+    # The window every series was computed over, so the panel can name it. With
+    # no date filter the honest answer is not "the selected period" — it is the
+    # span the data actually covers, so that is looked up rather than left for
+    # the UI to paper over.
+    period_from, period_to = f.date_from, f.date_to
+    if period_from is None or period_to is None:
+        observed = (
+            await session.execute(
+                select(func.min(b.c.prompt_date), func.max(b.c.prompt_date))
+            )
+        ).one_or_none()
+        if observed:
+            period_from = period_from or observed[0]
+            period_to = period_to or observed[1]
+
+    result: dict[str, Any] = {
+        "period_from": period_from.isoformat() if period_from else None,
+        "period_to": period_to.isoformat() if period_to else None,
+        "mine": mine,
+        "organisation": group_levers(others),
+        "organisation_size": len(others),
+        # Per lever, and against the organisation — stated in the UI, because a
+        # percentile without its population is a number pretending to be a fact.
+        "percentile": {
+            lever: _percentile(
+                mine[lever],
+                [
+                    float(getattr(r, lever))
+                    for r in others
+                    if getattr(r, lever) is not None
+                ],
+            )
+            for lever in GCSE_LEVERS
+        },
+        "team": None,
+        "team_label": None,
+        "team_size": len(peers),
+        # Why the team series is missing, so the UI can distinguish "your team is
+        # too small to show" from "we don't know which team you're in". Those are
+        # different facts and an empty bar tells neither.
+        "team_withheld": None,
+        "min_team_peers": MIN_TEAM_PEERS,
+    }
+
+    if len(peers) >= MIN_TEAM_PEERS:
+        result["team"] = group_levers(peers)
+        result["team_label"] = team_label
+    else:
+        result["team_withheld"] = "too_small" if grouping_known else "unknown_team"
+    return result
+
+
 # --- personal coaching (per user) ---------------------------------------
 async def personal(session: AsyncSession, user_id: str) -> dict:
-    """Everything one person would see: their stats, GCSE vs team, and focus."""
+    """Everything one person would see: their stats, how they compare, and focus."""
     f = PromptFilter(users=[user_id])
     b = _base(f)
 
@@ -992,15 +1227,16 @@ async def personal(session: AsyncSession, user_id: str) -> dict:
     org_avg_quality = await session.scalar(select(func.avg(PromptAnalysis.quality_score)))
 
     mine: dict[str, float | None] = {}
-    team: dict[str, float | None] = {}
     for lever in GCSE_LEVERS:
-        col = getattr(PromptAnalysis, f"gcse_{lever}")
         mine[lever] = _round(
             await session.scalar(
                 select(func.avg(getattr(b.c, f"gcse_{lever}")))
             )
         )
-        team[lever] = _round(await session.scalar(select(func.avg(col))))
+
+    # You / your team / your organisation, from one pass. The team is a real
+    # team here — it used to be the whole tenant with a "Team average" label.
+    comparison = await peer_comparison(session, user_id=user_id)
 
     known = {k: v for k, v in mine.items() if v is not None}
     weakest = min(known, key=known.get) if known else None
@@ -1020,7 +1256,7 @@ async def personal(session: AsyncSession, user_id: str) -> dict:
         "user_generated_prompts": user_gen,
         "user_generated_pct": round(100.0 * user_gen / total, 1) if total else 0.0,
         "gcse_mine": mine,
-        "gcse_team": team,
+        "comparison": comparison,
         "weakest_lever": weakest,
         "strongest_lever": strongest,
     }

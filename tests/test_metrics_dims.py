@@ -194,6 +194,8 @@ async def test_personal_per_user(session) -> None:
     assert p["conversations"] == 1
     assert p["avg_quality"] == 5.0
     assert p["weakest_lever"] == "source"  # gcse_source is the lowest lever
-    # team GCSE differs from mine (team spans all users).
     assert p["gcse_mine"]["source"] is not None
-    assert p["gcse_team"]["source"] is not None
+    # The comparison replaced a tenant-wide average labelled "Team average".
+    # This fixture has a handful of people, so the team must be withheld.
+    assert p["comparison"]["team"] is None
+    assert p["comparison"]["organisation"]["source"] is not None

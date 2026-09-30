@@ -323,6 +323,20 @@ async def backfill_coverage(session: AsyncSession = Depends(get_session)) -> dic
     }
 
 
+@router.get("/scan-history")
+async def scan_history(
+    limit: int = 100,
+    session: AsyncSession = Depends(get_session),
+) -> list[dict]:
+    """Every collection and analysis run, newest first.
+
+    Admin-only: a failed row carries its error detail.
+    """
+    from api import metrics
+
+    return await metrics.scan_history(session, limit=max(1, min(limit, 500)))
+
+
 @router.get("/status", response_model=StatusOut)
 async def status(session: AsyncSession = Depends(get_session)) -> StatusOut:
     cfg = await _get_config(session)
