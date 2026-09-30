@@ -1196,11 +1196,17 @@ async def peer_comparison(
             period_from = period_from or observed[0]
             period_to = period_to or observed[1]
 
+    # A percentile is a statement about where the viewer sits among named
+    # individuals, so it is withheld with the organisation series rather than
+    # surviving it.
+    org_shown = len(others) >= MIN_TEAM_PEERS
     percentile = {
         lever: _percentile(
             mine_raw[lever],
             [float(getattr(r, lever)) for r in others if getattr(r, lever) is not None],
         )
+        if org_shown
+        else None
         for lever in GCSE_LEVERS
     }
 
@@ -1208,8 +1214,16 @@ async def peer_comparison(
         "period_from": period_from.isoformat() if period_from else None,
         "period_to": period_to.isoformat() if period_to else None,
         "mine": mine,
-        "organisation": group_levers(others),
+        # The same disclosure rule, applied to the organisation. The threshold
+        # exists because a mean plus the viewer's own figure gives an individual
+        # away, and that arithmetic does not care whether the group was called a
+        # team or a tenant: in a four-person pilot the "Organisation" bar is as
+        # revealing as a team of four would be. So below the floor the viewer
+        # sees their own figures and nothing else, which is the correct outcome
+        # rather than a degraded one.
+        "organisation": group_levers(others) if org_shown else None,
         "organisation_size": len(others),
+        "organisation_state": "shown" if org_shown else "too_small",
         # Per lever, and against the organisation — stated in the UI, because a
         # percentile without its population is a number pretending to be a fact.
         # Kept in the payload because it is the honest underlying number; the UI
@@ -1219,20 +1233,25 @@ async def peer_comparison(
             lever: _percentile_band(percentile[lever]) for lever in GCSE_LEVERS
         },
         "team": None,
-        "team_label": None,
+        # The label is not the disclosure, the figure is — so it is returned even
+        # when the series is withheld, and the message can name the department.
+        "team_label": team_label,
         "team_size": len(peers),
-        # Why the team series is missing, so the UI can distinguish "your team is
-        # too small to show" from "we don't know which team you're in". Those are
-        # different facts and an empty bar tells neither.
-        "team_withheld": None,
+        # Stated, never inferred. A department of one and a record with no
+        # department at all both yield zero peers, and telling the first person
+        # "we don't know which team you're in" is a false statement about their
+        # own data — it also points an administrator at the wrong problem, since
+        # the fixable case is the one where nobody has populated a department.
+        "team_state": "shown" if len(peers) >= MIN_TEAM_PEERS else (
+            "too_small" if grouping_known else "unknown"
+        ),
+        # The floor, owned and enforced here, so no page has to hardcode a five
+        # that could drift from the rule.
         "min_team_peers": MIN_TEAM_PEERS,
     }
 
-    if len(peers) >= MIN_TEAM_PEERS:
+    if result["team_state"] == "shown":
         result["team"] = group_levers(peers)
-        result["team_label"] = team_label
-    else:
-        result["team_withheld"] = "too_small" if grouping_known else "unknown_team"
     return result
 
 

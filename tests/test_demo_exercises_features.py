@@ -55,7 +55,7 @@ async def test_some_teams_are_still_withheld(session) -> None:
     for uid in ("user-08", "user-11", "user-22"):
         result = await metrics.peer_comparison(session, user_id=uid)
         if result["team"] is None:
-            withheld.append((uid, result["team_withheld"]))
+            withheld.append((uid, result["team_state"]))
 
     assert withheld, "no persona demonstrates a withheld team"
     assert all(reason == "too_small" for _, reason in withheld)

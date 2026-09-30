@@ -26,8 +26,20 @@ Spec: [`docs/specs/comparisons-and-timelines.md`](docs/specs/comparisons-and-tim
   team is your department, falling back to the people who share your manager.
   It is **withheld entirely below five peers**: with two people in a team, the
   team average and your own figure give the other person's exact number. When it
-  is withheld the chart distinguishes "your team is too small to show" from "we
-  don't know which team you're in".
+  is withheld the endpoint **states** which applies — `team_state` is `shown`,
+  `too_small` or `unknown` — rather than the page inferring it from a peer count
+  of zero. A department of one and a record with no department at all both hold
+  no peers, and telling the first person "we don't know which team you're in" is
+  a false statement about their own data; it also points an administrator at the
+  wrong problem, since the fixable case is the unpopulated department. The
+  department name is still returned when the figure is withheld — the label is
+  not the disclosure.
+- **The same floor applies to the organisation.** The rule exists because a mean
+  plus the viewer's own figure gives an individual away, and that arithmetic does
+  not care whether the group is called a team or a tenant: in a four-person pilot
+  the "Organisation" bar is exactly as revealing as a team of four. Below the
+  floor the viewer sees their own figures and nothing else, and the percentile
+  goes with it.
 - **Scan history**, under Administration — every collection and analysis run with
   its kind, duration, what it wrote and whether it succeeded, a failed run showing
   its error, and status as shape plus word (● ◐ ○). This is what `job_runs` has

@@ -140,19 +140,23 @@ export interface Gcse {
 /**
  * How one person compares on the levers (part of GET /metrics/me/coaching).
  *
- * ``team`` is null when the server withholds it — either the grouping is
- * smaller than ``min_team_peers`` or the directory does not say which team the
- * person is in. ``team_withheld`` distinguishes the two.
+ * A series is null when the server withholds it, and the matching ``*_state``
+ * says why. Never inferred from a zero: a department of one and a record with no
+ * department at all both hold no peers, and they are different facts.
  */
 export interface PeerComparisonData {
   mine: Gcse;
   team: Gcse | null;
   team_label: string | null;
   team_size: number;
-  team_withheld: "too_small" | "unknown_team" | null;
+  /** Why the team series is or is not drawn. Stated, never inferred. */
+  team_state: "shown" | "too_small" | "unknown";
+  /** The disclosure floor, owned and enforced by the server. */
   min_team_peers: number;
-  organisation: Gcse;
+  /** Null when the whole population is small enough to identify someone. */
+  organisation: Gcse | null;
   organisation_size: number;
+  organisation_state: "shown" | "too_small";
   percentile: Partial<Record<keyof Gcse, number | null>>;
   /** The band the UI shows: an exact percentile over a 1-10 average is false precision. */
   percentile_band: Partial<Record<keyof Gcse, string | null>>;

@@ -80,7 +80,7 @@ async def test_team_withheld_when_too_small(session) -> None:
 
     result = await metrics.peer_comparison(session, user_id="me")
     assert result["team"] is None
-    assert result["team_withheld"] == "too_small"
+    assert result["team_state"] == "too_small"
     assert result["team_size"] == 4
 
 
@@ -150,7 +150,7 @@ async def test_unknown_team_when_no_department_or_manager(session) -> None:
 
     result = await metrics.peer_comparison(session, user_id="me")
     assert result["team"] is None
-    assert result["team_withheld"] == "unknown_team"
+    assert result["team_state"] == "unknown"
 
 
 @pytest.mark.asyncio
@@ -301,3 +301,113 @@ async def test_the_band_is_what_the_lever_scale_can_support(session) -> None:
     assert metrics._percentile_band(25) == "lower half"
     assert metrics._percentile_band(24) == "bottom quarter"
     assert metrics._percentile_band(None) is None
+
+
+@pytest.mark.asyncio
+async def test_a_department_of_one_reports_too_small_not_unknown(session) -> None:
+    # The viewer's directory record HAS a department, but nobody else shares
+    # it. That is "too small", not "unknown" — telling someone whose
+    # department is on file that we don't know their team is a false
+    # statement about their own data, and it points an administrator at the
+    # wrong problem.
+    _add_person(session, "me", department="Eng")
+    _add_prompt(session, "p-me", "me")
+    await session.commit()
+
+    result = await metrics.peer_comparison(session, user_id="me")
+    assert result["team_state"] == "too_small"
+
+
+@pytest.mark.asyncio
+async def test_no_department_and_no_manager_reports_unknown(session) -> None:
+    _add_person(session, "me", department=None, manager_id=None)
+    _add_prompt(session, "p-me", "me")
+    await session.commit()
+
+    result = await metrics.peer_comparison(session, user_id="me")
+    assert result["team_state"] == "unknown"
+
+
+@pytest.mark.asyncio
+async def test_a_shown_team_says_so(session) -> None:
+    _add_person(session, "me", department="Eng")
+    for i in range(MIN_TEAM_PEERS):
+        _add_person(session, f"peer{i}", department="Eng")
+    _add_prompt(session, "p-me", "me")
+    for i in range(MIN_TEAM_PEERS):
+        _add_prompt(session, f"p-peer{i}", f"peer{i}")
+    await session.commit()
+
+    result = await metrics.peer_comparison(session, user_id="me")
+    assert result["team_state"] == "shown"
+    assert result["team"] is not None
+
+
+@pytest.mark.asyncio
+async def test_the_manager_fallback_never_makes_the_group_smaller(session) -> None:
+    # Department has 3 other people; the manager group has only 1 other. The
+    # fallback must not replace the larger department group with the smaller
+    # manager group.
+    _add_person(session, "me", department="Eng", manager_id="mgr1")
+    for i in range(3):
+        _add_person(session, f"dept{i}", department="Eng", manager_id=f"othermgr{i}")
+    _add_person(session, "report0", department="Sales", manager_id="mgr1")
+    _add_prompt(session, "p-me", "me")
+    for i in range(3):
+        _add_prompt(session, f"p-dept{i}", f"dept{i}")
+    _add_prompt(session, "p-report0", "report0")
+    await session.commit()
+
+    result = await metrics.peer_comparison(session, user_id="me")
+    assert result["team_size"] == 3
+    assert result["team_label"] == "Eng"
+    assert result["team_state"] == "too_small"
+
+
+@pytest.mark.asyncio
+async def test_the_floor_is_reported_so_the_page_need_not_hardcode_it(session) -> None:
+    _add_person(session, "me", department="Eng")
+    _add_prompt(session, "p-me", "me")
+    await session.commit()
+
+    result = await metrics.peer_comparison(session, user_id="me")
+    assert result["min_team_peers"] == metrics.MIN_TEAM_PEERS
+
+
+@pytest.mark.asyncio
+async def test_the_team_label_survives_being_withheld(session) -> None:
+    # A department with 2 other people is withheld, but the label is not the
+    # disclosure — the figure is — so it still names the department.
+    _add_person(session, "me", department="Eng")
+    for i in range(2):
+        _add_person(session, f"peer{i}", department="Eng")
+    _add_prompt(session, "p-me", "me")
+    for i in range(2):
+        _add_prompt(session, f"p-peer{i}", f"peer{i}")
+    await session.commit()
+
+    result = await metrics.peer_comparison(session, user_id="me")
+    assert result["team_state"] == "too_small"
+    assert result["team"] is None
+    assert result["team_label"] == "Eng"
+
+
+@pytest.mark.asyncio
+async def test_a_tiny_organisation_is_withheld_too(session) -> None:
+    # Only 3 people other than the viewer exist at all. A mean over a group
+    # that small plus the viewer's own figure gives an individual away, and
+    # that arithmetic does not care whether the group is called a team or a
+    # tenant.
+    _add_person(session, "me", department="Eng")
+    for i in range(3):
+        _add_person(session, f"other{i}", department="Sales")
+    _add_prompt(session, "p-me", "me")
+    for i in range(3):
+        _add_prompt(session, f"p-other{i}", f"other{i}")
+    await session.commit()
+
+    result = await metrics.peer_comparison(session, user_id="me")
+    assert result["organisation"] is None
+    assert result["organisation_state"] == "too_small"
+    for lever in metrics.GCSE_LEVERS:
+        assert result["percentile"][lever] is None

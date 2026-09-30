@@ -1,21 +1,8 @@
 import ChartCard from "./ChartCard";
 import { score10 } from "../lib/format";
-import type { Gcse } from "../api/types";
-
-export interface PeerComparisonData {
-  mine: Gcse;
-  team: Gcse | null;
-  team_label: string | null;
-  team_size: number;
-  team_withheld: "too_small" | "unknown_team" | null;
-  min_team_peers: number;
-  organisation: Gcse;
-  organisation_size: number;
-  percentile: Partial<Record<keyof Gcse, number | null>>;
-  percentile_band: Partial<Record<keyof Gcse, string | null>>;
-  period_from: string | null;
-  period_to: string | null;
-}
+// One definition, in api/types.ts: a shape declared in both places compiles
+// happily when only one of them gains a field.
+import type { Gcse, PeerComparisonData } from "../api/types";
 
 const MEASURES: { key: keyof Gcse; label: string }[] = [
   { key: "goal", label: "Goal" },
@@ -39,6 +26,33 @@ function fmtPeriod(from: string | null, to: string | null): string {
     });
   if (from && to) return `${d(from)} – ${d(to)}`;
   return from ? `since ${d(from)}` : `up to ${d(to as string)}`;
+}
+
+/**
+ * Why the team series is missing, in words.
+ *
+ * Read from ``team_state`` rather than inferred from ``team_size === 0``: a
+ * department of one and a record with no department at all both hold no peers,
+ * and telling the first person "we don't know which team you're in" is a false
+ * statement about their own data. It also points an administrator at the wrong
+ * problem, because the fixable case is the one where nobody populated a
+ * department.
+ */
+function withheldTeamNote(data: PeerComparisonData, self: boolean): string {
+  const them = self ? "you" : "they";
+  const their = self ? "your" : "their";
+  if (data.team_state === "too_small") {
+    const who =
+      data.team_size === 0
+        ? `${them} are the only person on file in ${
+            data.team_label ?? `${their} team`
+          }`
+        : `${data.team_label ?? `${their} team`} has ${data.team_size} other ${
+            data.team_size === 1 ? "person" : "people"
+          } on file`;
+    return `No team comparison — ${who}, and a team average is only shown from ${data.min_team_peers}. Below that, the average and ${their} own figure together would give an individual's number away.`;
+  }
+  return `No team comparison — we don't know which team ${them} are in, because ${their} directory record has no department and no manager. Populating either in Entra will fill this in.`;
 }
 
 /**
@@ -68,12 +82,15 @@ export default function PeerComparison({
   perspective?: "self" | "other";
 }) {
   const self = perspective === "self";
-  const hasTeam = data.team !== null;
+  const hasTeam = data.team_state === "shown" && data.team !== null;
+  const hasOrg = data.organisation_state === "shown" && data.organisation !== null;
   const subject = self ? "You" : "This person";
   const theirTeam = self ? "your team" : "their team";
   const who = hasTeam
     ? `${subject}, ${theirTeam} (${data.team_label}) and the organisation`
-    : `${subject} and the organisation`;
+    : hasOrg
+      ? `${subject} and the organisation`
+      : `${subject} only`;
   const subtitle = `${who} · each lever out of 10 · ${fmtPeriod(
     data.period_from,
     data.period_to,
@@ -96,7 +113,7 @@ export default function PeerComparison({
           const band = data.percentile_band?.[m.key];
           const rows: { label: string; value: number | null; bar: string }[] = [
             { label: subject, value: mine, bar: "bg-brand-600" },
-            ...(data.team !== null
+            ...(hasTeam
               ? [
                   {
                     label: self ? "Your team" : "Their team",
@@ -105,7 +122,9 @@ export default function PeerComparison({
                   },
                 ]
               : []),
-            { label: "Organisation", value: org, bar: "bg-slate-400" },
+            ...(hasOrg
+              ? [{ label: "Organisation", value: org, bar: "bg-slate-400" }]
+              : []),
           ];
           return (
             <div key={m.key}>
@@ -114,7 +133,7 @@ export default function PeerComparison({
                   {m.label}
                 </span>
                 <span className="text-xs text-slate-400 dark:text-slate-500">
-                  {band
+                  {band && hasOrg
                     ? `In the ${band} of the organisation`
                     : "not enough data to rank"}
                 </span>
@@ -148,14 +167,15 @@ export default function PeerComparison({
       </div>
       {!hasTeam && (
         <p className="mt-4 text-xs text-slate-400 dark:text-slate-500">
-          No team comparison:{" "}
-          {data.team_withheld === "too_small"
-            ? `${theirTeam} is too small to show without identifying someone — a team average needs at least ${data.min_team_peers} other people in it, and ${
-                self ? "yours" : "theirs"
-              } has ${data.team_size}.`
-            : self
-              ? "we don't know which team you're in — your directory record has no department or manager."
-              : "we don't know which team they're in — their directory record has no department or manager."}
+          {withheldTeamNote(data, self)}
+        </p>
+      )}
+      {!hasOrg && (
+        <p className="mt-2 text-xs text-slate-400 dark:text-slate-500">
+          No organisation comparison either — only {data.organisation_size} other{" "}
+          {data.organisation_size === 1 ? "person has" : "people have"} activity on
+          file, which is below the same floor of {data.min_team_peers}. An average
+          over a group that small is an individual's figure in disguise.
         </p>
       )}
     </ChartCard>
