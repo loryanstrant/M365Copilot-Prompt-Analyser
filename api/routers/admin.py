@@ -182,8 +182,11 @@ async def analysis_run(background: BackgroundTasks) -> IngestRunOut:
 
 
 @router.post("/seed-demo", response_model=IngestRunOut)
+# 140, not 40: the demo directory is 22 active people, and forty conversations
+# left most of them with one or two prompts — too thin for a team average, which
+# is the figure "How you compare" exists to show.
 async def seed_demo(
-    conversations: int = 40, reset: bool = True
+    conversations: int = 140, reset: bool = True
 ) -> IngestRunOut:
     """Seed synthetic prompt-analysis data so the dashboards render without
     live Microsoft Graph / Azure OpenAI.
@@ -197,7 +200,10 @@ async def seed_demo(
     stats = await seed(conversations, reset)
     return IngestRunOut(
         status="seeded",
-        detail=f"Seeded {stats['prompts']} prompts across {stats['conversations']} conversations.",
+        detail=(
+            f"Seeded {stats['prompts']} prompts across {stats['conversations']} "
+            f"conversations, and {stats['job_runs']} collection runs."
+        ),
     )
 
 
