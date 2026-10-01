@@ -30,6 +30,7 @@ from datetime import date, datetime, timedelta, timezone
 
 from sqlalchemy import delete, select
 
+from scripts._demo_tenant import COMPANY, DOMAIN
 from shared.db import SessionLocal
 from shared.models import (
     AppConfig,
@@ -176,11 +177,11 @@ def _persona_rows() -> list[dict[str, object]]:
         rows.append(
             {
                 "user_id": uid,
-                "upn": f"{local}@contoso.com",
-                "email": f"{local}@contoso.com",
+                "upn": f"{local}@{DOMAIN}",
+                "email": f"{local}@{DOMAIN}",
                 "display_name": name,
                 "job_title": title,
-                "company_name": "Contoso",
+                "company_name": COMPANY,
                 "department": dept,
                 "office_location": office,
                 "country": country,
