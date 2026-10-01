@@ -6,15 +6,33 @@ module, because ``shared.db`` builds its engine at import time.
 """
 from __future__ import annotations
 
+import atexit
 import os
 import tempfile
 
 # --- Configure environment before importing app modules ------------------
 # Force an isolated SQLite database so the suite never touches a real Postgres
 # (compose sets DATABASE_URL in the container; a plain setdefault wouldn't win).
-_TMP_DB = os.path.join(tempfile.gettempdir(), "copilot_test.db")
+#
+# The filename carries the process ID. It used to be a fixed "copilot_test.db",
+# which is also what the Usage Reporter's conftest picks — so two suites running
+# at once on one machine shared a single SQLite file, each dropping the other's
+# tables between tests. That shows up as "sqlite3.OperationalError: disk I/O
+# error" in tests that have nothing to do with each other, and it is the kind of
+# failure people re-run rather than diagnose.
+_TMP_DB = os.path.join(tempfile.gettempdir(), f"copilot_test_{os.getpid()}.db")
 if os.path.exists(_TMP_DB):
     os.remove(_TMP_DB)
+
+
+@atexit.register
+def _remove_test_db() -> None:
+    """Per-process files would otherwise accumulate in the temp directory."""
+    for suffix in ("", "-wal", "-shm"):
+        try:
+            os.remove(_TMP_DB + suffix)
+        except OSError:
+            pass
 
 os.environ["DATABASE_URL"] = f"sqlite+aiosqlite:///{_TMP_DB}"
 os.environ["RUN_MIGRATIONS_ON_STARTUP"] = "false"

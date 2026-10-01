@@ -10,6 +10,7 @@ from __future__ import annotations
 import asyncio
 import logging
 from collections.abc import Callable
+from dataclasses import asdict, dataclass
 from datetime import datetime, timedelta, timezone
 from typing import Any, Protocol
 
@@ -291,6 +292,127 @@ async def sync_entra_users(
             count += await flush()
     count += await flush()
     return count
+
+
+# --- user-only sync (cheap; no prompts, no analysis) -------------------
+# The directory and licence snapshots are what every "who exists" screen reads,
+# and they are only written as a step of the full ingest. That makes recovering
+# from a stale user list needlessly expensive: a collection run pulls prompts
+# for every licensed user, and the scheduled path then pays Azure OpenAI to
+# analyse them. This runs the two user steps on their own.
+@dataclass
+class UserSyncProgress:
+    status: str = "idle"  # idle | running | completed | failed
+    licensed_users: int = 0
+    directory_users: int = 0
+    updated_at: str | None = None
+    detail: str | None = None
+
+
+_user_sync = UserSyncProgress()
+
+
+def get_user_sync_progress() -> dict[str, Any]:
+    return asdict(_user_sync)
+
+
+def user_sync_running() -> bool:
+    return _user_sync.status == "running"
+
+
+async def sync_users(
+    session_factory: SessionFactory,
+    *,
+    graph: GraphLike | None = None,
+    config: AppConfig | None = None,
+    now: datetime | None = None,
+) -> dict[str, Any]:
+    """Refresh only the licensed + directory user snapshots from Graph.
+
+    Deliberately does **not** pull prompts and does not touch the analysis
+    stage: the point is a cheap way to re-read who exists and who holds a
+    Copilot licence. Recorded as a ``users`` job so Scan history shows it.
+    """
+    now = now or datetime.now(timezone.utc)
+    owns_graph = False
+    _user_sync.status = "running"
+    _user_sync.detail = "Reading licensed users…"
+    _user_sync.updated_at = now.isoformat()
+
+    def _fail(detail: str, at: datetime | None = None) -> None:
+        _user_sync.status = "failed"
+        _user_sync.detail = detail
+        _user_sync.updated_at = (at or datetime.now(timezone.utc)).isoformat()
+
+    async with session_factory() as session:
+        # Everything after the status went to "running" is inside this try,
+        # including building the client and inserting the job row. Half-configured
+        # credentials make build_graph_client raise, and a sync that raised out
+        # here without clearing the flag would leave user_sync_running() true for
+        # the life of the process — every later refresh answering
+        # "already_running" with nothing actually running.
+        job: JobRun | None = None
+        stats: dict[str, Any] = {}
+        try:
+            if config is None:
+                config = await load_app_config(session)
+                if config is None or not config.tenant_id:
+                    raise IngestError("Graph is not configured yet.")
+            if graph is None:
+                graph = build_graph_client(config)
+                owns_graph = True
+
+            job = JobRun(job_name="users", status="running")
+            session.add(job)
+            await session.flush()
+
+            # Resolved once and threaded through, as in run_ingest: which SKUs
+            # grant Copilot is a per-tenant fact, not a per-step one.
+            granting = await resolve_granting_skus(graph, config)
+            stats["copilot_skus"] = len(granting)
+
+            stats["licensed_users"] = await sync_licensed_users(
+                session, graph, config, granting
+            )
+            _user_sync.licensed_users = stats["licensed_users"]
+            _user_sync.detail = "Recording licence totals…"
+            _user_sync.updated_at = datetime.now(timezone.utc).isoformat()
+
+            stats["license_counts"] = await sync_license_counts(
+                session, graph, config, now, granting
+            )
+            _user_sync.detail = "Reading directory users…"
+            _user_sync.updated_at = datetime.now(timezone.utc).isoformat()
+
+            stats["entra_users"] = await sync_entra_users(
+                session, graph, config, granting
+            )
+            _user_sync.directory_users = stats["entra_users"]
+
+            job.status = "success"
+            job.finished_at = datetime.now(timezone.utc)
+            job.stats = stats
+            await session.commit()
+            _user_sync.status = "completed"
+            _user_sync.detail = None
+            _user_sync.updated_at = job.finished_at.isoformat()
+            logger.info("User sync complete: %s", stats)
+            return stats
+        except Exception as exc:  # noqa: BLE001 - persisted for observability
+            # Clear the flag first: if persisting the failed job row throws in
+            # turn, the refresh must still not look like it is running.
+            _fail(str(exc))
+            stats["error"] = str(exc)
+            if job is not None:
+                job.status = "failed"
+                job.finished_at = datetime.now(timezone.utc)
+                job.stats = stats
+                await session.commit()
+            logger.exception("User sync failed")
+            raise
+        finally:
+            if owns_graph and graph is not None:
+                await graph.aclose()
 
 
 # --- orchestrator -------------------------------------------------------

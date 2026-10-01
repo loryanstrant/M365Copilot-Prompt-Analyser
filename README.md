@@ -105,6 +105,22 @@ guided app-registration wizard, the group fields that decide who can open the
 report and who administers it, demo data, and the manual run controls. Secrets
 are write-only: they can be set and replaced, never read back.
 
+Three of those controls start work, and they are deliberately different sizes:
+
+| Control | What it does | Cost |
+| --- | --- | --- |
+| **Run now** | Re-reads the user lists, then collects prompts for every licensed user | A full Graph sweep |
+| **Refresh users now** | Re-reads the directory and who holds a Copilot licence, and stops | Cheap — no prompts, nothing sent to Azure OpenAI |
+| **Run analysis now** | Analyses prompts already collected | Azure OpenAI tokens |
+
+**Refresh users now** exists because the **Tenant users** page, and the Copilot-licence
+column on it, are written only as a *step of* a collection run. If that step has not
+run since the deployment — or has not run since someone was added to the tenant — the
+page is missing people even though nothing is broken. This repairs it in about a
+minute without paying for a prompt pull. A refresh already in progress answers
+**◐ already in progress** rather than starting a second Graph sweep, and every run is
+recorded on **Scan history** as *User refresh*, with its error if it failed.
+
 ![Settings](docs/screenshots/settings.png)
 
 ### Setup guide
@@ -168,9 +184,13 @@ you), **deployment** (default `gpt-5.4-mini`) and **key**, then **Test Azure Ope
 Historical backfill** to pull history (default 30 days). Ingest automatically runs the analysis
 stage; you can also trigger **Run analysis** from Settings. The **Data status** card shows
 Prompts / Conversations; the **Backfill** page has a run history table with per-run stats.
+If you only need the **Tenant users** page to be current — nobody is missing from it, licences
+are right — **Refresh users now** does that on its own, without a prompt pull or any Azure
+OpenAI spend.
 
-> **First run needs licensed users.** The backfill iterates your Copilot-**licensed** users, so run
-> an ingest (**Refresh now**) at least once first — that populates the licensed-user snapshot. A
+> **First run needs licensed users.** The backfill iterates your Copilot-**licensed** users, so
+> populate the licensed-user snapshot first — **Settings → Refresh users now** does exactly that
+> and nothing else, in about a minute; **Run now** also does it on the way to collecting prompts. A
 > backfill that "completes instantly with no data" almost always means **zero Copilot-licensed
 > users** were found: check **Test connection**'s *Copilot-licensed users* count, and if it's 0 the
 > configured **Copilot SKU ID** doesn't match any assigned licences (default is Microsoft 365
@@ -247,7 +267,7 @@ fictional person's prompts can never end up presented as yours beside live tenan
 - **In the app:** **Scan history** (every collection and analysis run, newest first, with what it
   wrote and why it failed), **Settings → Data status** (last run + counts) and **Historical
   backfill** (per-run history with prompts/lookback/status).
-- **Container logs (the real detail):** manual **Refresh now**, **Backfill** and **Run analysis**
+- **Container logs (the real detail):** manual **Run now**, **Refresh users now**, **Backfill** and **Run analysis**
   run inside the **`…-api-…`** Container App, so their logs live there — open it → **Monitoring →
   Log stream** (live), or **Logs** to query `ContainerAppConsoleLogs_CL`. The scheduled background
   ingest + analysis runs in the **`…-worker-…`** Container App — check its log stream for
