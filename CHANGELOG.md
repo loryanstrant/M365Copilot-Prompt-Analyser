@@ -5,7 +5,47 @@ Versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
-Two suite-wide passes, neither released yet.
+Two suite-wide passes, neither released yet, plus the changes below.
+
+### Refresh the user lists on demand
+
+#### Added
+
+- **Settings → Refresh users now**, and `POST /admin/users/refresh` behind it.
+  Re-reads the Entra directory and who holds a Copilot licence, and stops there:
+  no prompts are fetched and nothing is sent to Azure OpenAI. The user snapshots
+  were only ever written as a *step of* a collection run, so the only way to fix
+  a **Tenant users** page that was missing people — or whose Copilot-licence
+  column had never been populated since that code shipped — was a full ingest,
+  or waiting for the schedule. One of the sibling apps sat with the flag unset
+  for all 185 of its users for exactly this reason. Runs in the background,
+  refuses to start a second sweep while one is in progress (**◐ already in
+  progress** is the answer, not an error), and is recorded on **Scan history** as
+  *User refresh* with its stats or its error.
+
+  The endpoint deliberately matches
+  [M365Copilot-Usage-Reporter](https://github.com/loryanstrant/M365Copilot-Usage-Reporter)'s
+  `POST /admin/users/refresh` — same path, same `started` / `already_running`
+  vocabulary — so the suite has one idiom for this rather than four.
+
+#### Fixed
+
+- **The api image is built from the lockfile.** The frontend build stage copied
+  only `frontend/package.json` and ran `npm install`, resolving the dependency
+  tree from scratch on every build. On a sibling repo that stopped working
+  outright once a devDependency was added, failing the image publish with npm's
+  `Cannot read properties of null (reading 'edgesOut')`. It now copies
+  `package-lock.json` and runs `npm ci`, which also closes a quieter gap: the
+  published image was never built from the same tree CI type-checked and tested
+  against.
+
+- **The test suite no longer collides with the Usage Reporter's.** Both
+  `conftest.py` files named their throwaway SQLite database
+  `<tempdir>/copilot_test.db`, so two suites running on one machine at the same
+  time shared a single file and dropped each other's tables between tests. The
+  symptom was `sqlite3.OperationalError: disk I/O error` in tests with no
+  relationship to each other — the kind of failure that gets re-run rather than
+  diagnosed. The filename now carries the process ID, and is removed on exit.
 
 ### Comparisons, timelines and scan history — the second pass
 Spec: [`docs/specs/comparisons-and-timelines.md`](docs/specs/comparisons-and-timelines.md).

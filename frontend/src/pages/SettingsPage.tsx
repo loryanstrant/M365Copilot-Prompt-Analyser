@@ -41,6 +41,7 @@ export default function SettingsPage() {
   const [testingAoai, setTestingAoai] = useState(false);
   const [ingesting, setIngesting] = useState(false);
   const [analysing, setAnalysing] = useState(false);
+  const [refreshingUsers, setRefreshingUsers] = useState(false);
   const [banner, setBanner] = useState<Banner | null>(null);
   const [test, setTest] = useState<TestConnectionResult | null>(null);
   const [status, setStatus] = useState<StatusResult | null>(null);
@@ -207,6 +208,30 @@ export default function SettingsPage() {
       });
     } finally {
       setIngesting(false);
+    }
+  }
+
+  async function onRefreshUsers() {
+    setRefreshingUsers(true);
+    setBanner(null);
+    try {
+      const res = await api<IngestRunResult>("/admin/users/refresh", {
+        method: "POST",
+      });
+      // "already_running" is a real answer, not a failure: one refresh at a
+      // time is the guard working, so it reads as information either way.
+      setBanner({
+        kind: "info",
+        text: `${res.status === "already_running" ? "◐" : "●"} ${res.detail}`,
+      });
+      pollStatus();
+    } catch (err) {
+      setBanner({
+        kind: "error",
+        text: err instanceof ApiError ? err.message : "User refresh failed to start",
+      });
+    } finally {
+      setRefreshingUsers(false);
     }
   }
 
@@ -412,7 +437,23 @@ export default function SettingsPage() {
               >
                 {ingesting ? "Starting…" : "Run now"}
               </button>
+              <button
+                type="button"
+                onClick={onRefreshUsers}
+                disabled={refreshingUsers}
+                className="btn-secondary"
+              >
+                {refreshingUsers ? "Starting…" : "Refresh users now"}
+              </button>
             </div>
+            <p className="text-xs text-slate-400 dark:text-slate-500">
+              <span className="font-semibold">Refresh users now</span> re-reads the
+              directory and who holds a Copilot licence, and stops there — no prompts
+              are fetched and nothing is sent to Azure OpenAI, so it is the cheap way
+              to fix a Tenant users page that is missing people.{" "}
+              <span className="font-semibold">Run now</span> does that and then
+              collects prompts.
+            </p>
           </div>
 
           <div className="space-y-6">

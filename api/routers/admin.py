@@ -35,7 +35,13 @@ from worker.backfill import (
     request_cancel,
     run_backfill,
 )
-from worker.ingest import run_ingest, test_graph_connection
+from worker.ingest import (
+    IngestError,
+    run_ingest,
+    sync_users,
+    test_graph_connection,
+    user_sync_running,
+)
 
 logger = logging.getLogger("api.admin")
 
@@ -46,6 +52,7 @@ router = APIRouter(prefix="/admin", tags=["admin"], dependencies=[Depends(requir
 _DEFAULT_SKUS: list[str] = []
 _ingest_lock = asyncio.Lock()
 _analysis_lock = asyncio.Lock()
+_user_sync_lock = asyncio.Lock()
 
 
 def _to_out(cfg: AppConfig | None) -> AppConfigOut:
@@ -239,6 +246,34 @@ async def ingest_run(background: BackgroundTasks) -> IngestRunOut:
         )
     background.add_task(_run_manual_ingest)
     return IngestRunOut(status="started", detail="Ingest started in the background.")
+
+
+async def _run_user_sync() -> None:
+    async with _user_sync_lock:
+        try:
+            await sync_users(SessionLocal)
+        except IngestError as exc:
+            logger.info("User refresh skipped: %s", exc)
+        except Exception:  # pragma: no cover - logged for observability
+            logger.exception("User refresh failed")
+
+
+@router.post("/users/refresh", response_model=IngestRunOut)
+async def users_refresh(background: BackgroundTasks) -> IngestRunOut:
+    """Re-read the directory and licence lists only (no prompt pull, no analysis).
+
+    The cheap half of a collection run: it answers "who exists and who holds a
+    Copilot licence" without fetching prompts or spending anything on Azure
+    OpenAI, so a stale Tenant users page can be repaired in a minute.
+    """
+    if _user_sync_lock.locked() or user_sync_running():
+        return IngestRunOut(
+            status="already_running", detail="A user refresh is already in progress."
+        )
+    background.add_task(_run_user_sync)
+    return IngestRunOut(
+        status="started", detail="Refreshing users in the background."
+    )
 
 
 async def _run_backfill(lookback_days: int | None) -> None:

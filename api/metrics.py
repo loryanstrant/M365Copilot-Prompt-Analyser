@@ -183,8 +183,10 @@ JOB_KIND_LABELS = {
     "scheduled-analysis": "Scheduled analysis",
     "manual-analysis": "Manual analysis",
     "backfill": "Historical backfill",
+    # The user-only refresh. Shared with the siblings, which record it under the
+    # same name, so their rows read too if a database is ever shared.
+    "users": "User refresh",
     # The siblings', so their rows read if a database is ever shared
-    "users": "User sync",
     "csv-cowork-usage": "Cowork usage import",
     "csv-credit-consumption": "Credit consumption import",
 }
