@@ -447,11 +447,12 @@ export default function SettingsPage() {
               </button>
             </div>
             <p className="text-xs text-slate-400 dark:text-slate-500">
-              "Refresh users now" re-reads the directory and who holds a Copilot
-              licence, and stops there — no prompts are fetched and nothing is sent
-              to Azure OpenAI, so it is the cheap way to fix a Tenant users page
-              that is missing people. "Run now" does that and then collects
-              prompts.
+              <span className="font-semibold">Refresh users now</span> re-reads the
+              directory and who holds a Copilot licence, and stops there — no prompts
+              are fetched and nothing is sent to Azure OpenAI, so it is the cheap way
+              to fix a Tenant users page that is missing people.{" "}
+              <span className="font-semibold">Run now</span> does that and then
+              collects prompts.
             </p>
           </div>
 

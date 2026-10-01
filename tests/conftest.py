@@ -34,6 +34,7 @@ def _remove_test_db() -> None:
         except OSError:
             pass
 
+
 os.environ["DATABASE_URL"] = f"sqlite+aiosqlite:///{_TMP_DB}"
 os.environ["RUN_MIGRATIONS_ON_STARTUP"] = "false"
 os.environ["APP_ENV"] = "test"

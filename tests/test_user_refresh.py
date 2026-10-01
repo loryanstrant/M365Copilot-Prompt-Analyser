@@ -1,6 +1,6 @@
 """The user-only refresh — ``sync_users`` and ``POST /admin/users/refresh``.
 
-Three things are worth pinning down, because each is a way the button could be
+Four things are worth pinning down, because each is a way the button could be
 quietly useless:
 
 - it actually writes the directory and licence snapshots the Tenant users page
@@ -9,10 +9,15 @@ quietly useless:
   starting a concurrent Graph sweep;
 - it does **not** drag the prompt pull or the Azure OpenAI analysis stage along.
   That is the whole reason it exists next to "Run now", so it is asserted rather
-  than assumed.
+  than assumed;
+- no path out of a refresh leaves the progress flag set. If one did, every later
+  click would answer ``already_running`` with nothing running, for the life of
+  the api process — so the failure, half-configured and cancelled paths each get
+  a test.
 """
 from __future__ import annotations
 
+import asyncio
 from datetime import datetime, timezone
 
 import httpx
@@ -260,6 +265,57 @@ async def test_unconfigured_graph_fails_without_jamming_the_button():
 
     assert user_sync_running() is False
     assert get_user_sync_progress()["detail"] == "Graph is not configured yet."
+
+
+@pytest.mark.asyncio
+async def test_a_cancelled_refresh_does_not_stay_running():
+    """Cancellation is a BaseException, so it never reaches the except clause.
+
+    A container shutting down mid-refresh must still not leave the flag set: if
+    the process survives the cancellation, the button would be jammed.
+    """
+    from worker.ingest import get_user_sync_progress, user_sync_running
+
+    class Cancelling(FakeGraph):
+        async def get_subscribed_skus(self):
+            raise asyncio.CancelledError
+
+    with pytest.raises(asyncio.CancelledError):
+        await sync_users(
+            SessionLocal,
+            graph=Cancelling(licensed=[], skus=[], directory=[]),
+            config=_config(),
+            now=NOW,
+        )
+
+    assert user_sync_running() is False
+    assert get_user_sync_progress()["status"] == "failed"
+
+
+@pytest.mark.asyncio
+async def test_counts_do_not_survive_into_a_later_failed_run():
+    """Otherwise a failure reports the previous run's totals as if they were its own."""
+    from worker.ingest import get_user_sync_progress
+
+    await sync_users(SessionLocal, graph=_fake_graph(), config=_config(), now=NOW)
+    assert get_user_sync_progress()["licensed_users"] == 2
+
+    class Broken(FakeGraph):
+        async def get_subscribed_skus(self):
+            raise RuntimeError("Graph said no")
+
+    with pytest.raises(RuntimeError):
+        await sync_users(
+            SessionLocal,
+            graph=Broken(licensed=[], skus=[], directory=[]),
+            config=_config(),
+            now=NOW,
+        )
+
+    progress = get_user_sync_progress()
+    assert progress["status"] == "failed"
+    assert progress["licensed_users"] == 0
+    assert progress["directory_users"] == 0
 
 
 @pytest.mark.asyncio

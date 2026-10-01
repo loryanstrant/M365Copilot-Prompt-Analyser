@@ -335,7 +335,11 @@ async def sync_users(
     """
     now = now or datetime.now(timezone.utc)
     owns_graph = False
+    # Counts are reset, not carried: a run that fails early would otherwise
+    # report the previous run's totals beside a "failed" status.
     _user_sync.status = "running"
+    _user_sync.licensed_users = 0
+    _user_sync.directory_users = 0
     _user_sync.detail = "Reading licensed users…"
     _user_sync.updated_at = now.isoformat()
 
@@ -411,6 +415,12 @@ async def sync_users(
             logger.exception("User sync failed")
             raise
         finally:
+            # A cancellation — container shutting down mid-refresh — is a
+            # BaseException, so it does not reach the except above. Nothing may
+            # leave this function still claiming to be running, whatever path it
+            # took out, or the button stays jammed.
+            if _user_sync.status == "running":
+                _fail("The refresh was interrupted before it finished.")
             if owns_graph and graph is not None:
                 await graph.aclose()
 
