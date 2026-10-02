@@ -2,6 +2,7 @@ import { type ReactNode } from "react";
 import { NavLink } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext";
 import { useTheme } from "../theme/ThemeContext";
+import CustomerLogo, { useHasCustomerBranding } from "./CustomerLogo";
 import SvgDefs from "./SvgDefs";
 
 function navClass({ isActive }: { isActive: boolean }): string {
@@ -34,6 +35,7 @@ function NavSectionLabel({ children }: { children: ReactNode }) {
 export default function Layout({ children }: { children: ReactNode }) {
   const { user, logout } = useAuth();
   const { theme, toggle } = useTheme();
+  const hasCustomerBranding = useHasCustomerBranding();
   const canViewOrg = user?.can_view_org ?? false;
   const hasPersonal = user?.has_personal_view ?? false;
   const primaryName = user?.display_name ?? user?.upn ?? user?.username;
@@ -43,6 +45,15 @@ export default function Layout({ children }: { children: ReactNode }) {
     <div className="flex h-full">
       <SvgDefs />
       <aside className="flex w-60 shrink-0 flex-col border-r border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-800">
+        {/* The customer's own logo, above the product mark and separated from
+            it by a hairline. Its own strip rather than a square beside the
+            product mark, because corporate logos are usually wide wordmarks
+            and a 36px square slot shrinks one to an illegible sliver. */}
+        {hasCustomerBranding && (
+          <div className="flex items-center border-b border-slate-200 px-5 py-3 dark:border-slate-700">
+            <CustomerLogo placement="sidebar" />
+          </div>
+        )}
         <div className="flex items-center gap-3 px-5 py-5">
           <BrandMark />
           <div>
