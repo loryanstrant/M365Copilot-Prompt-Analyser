@@ -1,4 +1,5 @@
 import { useEffect, useState, type FormEvent } from "react";
+import BrandingCard from "../components/BrandingCard";
 import { Link } from "react-router-dom";
 import { api, ApiError } from "../api/client";
 import SetupWizard from "../components/SetupWizard";
@@ -641,6 +642,10 @@ export default function SettingsPage() {
           </div>
         </div>
       </form>
+
+      {/* Branding last: the connection and schedule settings are what an
+          admin must do, this is what they want to do. */}
+      <BrandingCard />
     </div>
   );
 }
